@@ -46,7 +46,7 @@ if uploaded_file is not None:
             st.write("Step 2: Executing RapidOCR text analysis...")
     
             results, _ = reader(gray)
-         time.sleep(1)
+            time.sleep(1)
             
             st.write("Step 3: Performing mathematical cross-verification...")
             time.sleep(1)
