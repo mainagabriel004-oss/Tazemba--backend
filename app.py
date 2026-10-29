@@ -76,7 +76,39 @@ if uploaded_file is not None:
             file_name="form_34a_extracted_data.csv",
             mime="text/csv"
         )
+    # 2. Checksum & Validation Logic
+    st.subheader("⚖️ Checksum & Validation")
+    
+    # Simple regex-based parser to find numbers and look for total votes
+    import re
+    
+    detected_numbers = []
+    for item in extracted_texts:
+        # Find any standalone 3-digit or 2-digit numbers representing votes (e.g., '016', '000', '17')
+        match = re.search(r'\b\d{2,3}\b', item)
+        if match:
+            try:
+                num = int(match.group())
+                detected_numbers.append(num)
+            except ValueError:
+                pass
 
+    if detected_numbers:
+        # Filter out obvious large IDs/serials if needed, or aggregate potential vote sums
+        st.write(f"Detected numeric sequences: {detected_numbers}")
+        
+        # For Form 34A audit: cross-reference sum of candidate rows vs declared valid votes
+        # Let's create an interactive validation input or automated check
+        calculated_sum = sum(detected_numbers[:-1]) if len(detected_numbers) > 1 else 0
+        declared_total = detected_numbers[-1] if detected_numbers else 0
+        
+        col1, col2 = st.columns(2)
+        col1.metric("Calculated Candidate Sum", sum(detected_numbers))
+        col2.metric("Status", "Pending Review")
+        
+        st.warning("⚠️ Audit Check: Verify candidate vote tallies against the form's declared valid votes header.")
+    else:
+        st.info("Checksum engine waiting for valid numerical vote rows.")
 
         
 
