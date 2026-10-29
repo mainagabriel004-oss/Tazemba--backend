@@ -76,28 +76,32 @@ if uploaded_file is not None:
             file_name="form_34a_extracted_data.csv",
             mime="text/csv"
         )
-     # 2. Checksum & Validation Logic
-    st.subheader("Checksum & Validation")
+         # 2. Checksum & Validation Logic
+         st.subheader("Checksum & Validation")
     
-    candidate_votes = []
+    if 'extracted_texts' in locals() and extracted_texts:
+        candidate_votes = []
 
-    for line in extracted_texts:
-        if line.isdigit() and len(line) == 3:
-            val = int(line)
-            if val < 500:  # Filter out metadata/registered voter numbers
-                candidate_votes.append(val)
+        for line in extracted_texts:
+            if line.isdigit() and len(line) == 3:
+                val = int(line)
+                if val < 500:  # Filter out metadata/registered voter numbers
+                    candidate_votes.append(val)
 
-    if candidate_votes:
-        calc_sum = sum(candidate_votes[:-1]) if len(candidate_votes) > 1 else sum(candidate_votes)
-        
-        col1, col2 = st.columns(2)
-        col1.metric("Calculated Candidate Sum", f"{calc_sum} Votes")
-        
-        if calc_sum > 0:
-            col2.metric("Checksum Status", "PASSED" if calc_sum == 34 else "MISMATCH")
-            st.info(f"Parsed Candidate Tallies: {candidate_votes}")
+        if candidate_votes:
+            calc_sum = sum(candidate_votes[:-1]) if len(candidate_votes) > 1 else sum(candidate_votes)
+            
+            col1, col2 = st.columns(2)
+            col1.metric("Calculated Candidate Sum", f"{calc_sum} Votes")
+            
+            if calc_sum > 0:
+                col2.metric("Checksum Status", "PASSED" if calc_sum == 34 else "MISMATCH")
+                st.info(f"Parsed Candidate Tallies: {candidate_votes}")
+        else:
+            st.info("Checksum engine waiting for parsed vote counts.")
     else:
-        st.info("Checksum engine waiting for parsed vote counts.")
+        st.info("Upload and process a Form 34A to run validation.")
+   
 
 
         
