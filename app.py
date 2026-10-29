@@ -19,9 +19,11 @@ st.write("Upload a scanned or photographed Form 34A document to instantly extrac
 # Cached EasyOCR Reader Initialization (Prevents timeout/memory crashes on Streamlit Cloud)
 @st.cache_resource
 def load_reader():
-    with st.spinner("Downloading AI model files (happens only once)..."):
-      return easyocr.Reader(['en'], gpu=False) 
+  return easyocr.Reader(['en'], gpu=False) 
 
+# Pre-load the model right on startup
+with st.spinner("Initializing AI model (one-time boot download)..."):
+  reader = load_reader()
 uploaded_file = st.file_uploader("Upload Form 34A Image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
