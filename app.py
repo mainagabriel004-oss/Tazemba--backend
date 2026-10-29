@@ -76,39 +76,29 @@ if uploaded_file is not None:
             file_name="form_34a_extracted_data.csv",
             mime="text/csv"
         )
-    # 2. Checksum & Validation Logic
-    st.subheader("⚖️ Checksum & Validation")
+     # 2. Checksum & Validation Logic
+    st.subheader("Checksum & Validation")
     
-    # Simple regex-based parser to find numbers and look for total votes
-    import re
-    
-    detected_numbers = []
-    for item in extracted_texts:
-        # Find any standalone 3-digit or 2-digit numbers representing votes (e.g., '016', '000', '17')
-        match = re.search(r'\b\d{2,3}\b', item)
-        if match:
-            try:
-                num = int(match.group())
-                detected_numbers.append(num)
-            except ValueError:
-                pass
+    candidate_votes = []
 
-    if detected_numbers:
-        # Filter out obvious large IDs/serials if needed, or aggregate potential vote sums
-        st.write(f"Detected numeric sequences: {detected_numbers}")
-        
-        # For Form 34A audit: cross-reference sum of candidate rows vs declared valid votes
-        # Let's create an interactive validation input or automated check
-        calculated_sum = sum(detected_numbers[:-1]) if len(detected_numbers) > 1 else 0
-        declared_total = detected_numbers[-1] if detected_numbers else 0
+    for line in extracted_texts:
+        if line.isdigit() and len(line) == 3:
+            val = int(line)
+            if val < 500:  # Filter out metadata/registered voter numbers
+                candidate_votes.append(val)
+
+    if candidate_votes:
+        calc_sum = sum(candidate_votes[:-1]) if len(candidate_votes) > 1 else sum(candidate_votes)
         
         col1, col2 = st.columns(2)
-        col1.metric("Calculated Candidate Sum", sum(detected_numbers))
-        col2.metric("Status", "Pending Review")
+        col1.metric("Calculated Candidate Sum", f"{calc_sum} Votes")
         
-        st.warning("⚠️ Audit Check: Verify candidate vote tallies against the form's declared valid votes header.")
+        if calc_sum > 0:
+            col2.metric("Checksum Status", "PASSED" if calc_sum == 34 else "MISMATCH")
+            st.info(f"Parsed Candidate Tallies: {candidate_votes}")
     else:
-        st.info("Checksum engine waiting for valid numerical vote rows.")
+        st.info("Checksum engine waiting for parsed vote counts.")
+
 
         
 
