@@ -4,6 +4,7 @@ import pytesseract
 from PIL import Image
 import zipfile
 import io
+import re
 
 # Page Config & Branding
 st.set_page_config(page_title="Tazemba Form 34A Audit Engine", page_icon="🗳️", layout="wide")
@@ -41,6 +42,7 @@ if uploaded_files:
     st.success(f"🚀 Queue loaded: {total_images} Form(s) ready for batch analysis.")
     
     batch_results = []
+    detailed_extractions = {}
     progress_bar = st.progress(0)
     status_text = st.empty()
 
@@ -52,18 +54,37 @@ if uploaded_files:
         raw_text = pytesseract.image_to_string(img)
         extracted_lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
         
-        # Dynamic calculation per form
-        station_total = 0
+        # Dynamic Candidate & Tally Extraction Logic
+        parsed_candidates = []
+        total_votes = 0
+        
         for line in extracted_lines:
-            digits = "".join([c for c in line if c.isdigit()])
-            if digits and len(digits) <= 6:
-                station_total += int(digits)
+            # Look for lines that contain letters (potential names) and numbers (votes)
+            if any(c.isalpha() for c in line) and any(c.isdigit() for c in line):
+                # Clean and split tokens to separate candidate text from trailing numbers
+                tokens = line.split()
+                digits_found = [t for t in tokens if t.isdigit() and len(t) <= 5]
+                
+                if digits_found:
+                    vote_val = int(digits_found[-1]) # Usually the last digit block is the tally
+                    name_part = " ".join([t for t in tokens if not t.isdigit() or t != digits_found[-1]])
+                    
+                    if len(name_part) > 2: # Filter out noise
+                        parsed_candidates.append({"Candidate": name_part, "Votes": vote_val})
+                        total_votes += vote_val
+
+        # Fallback if strict name parsing finds nothing on raw low-res test images
+        if not parsed_candidates:
+            parsed_candidates = [{"Candidate": "General Station Total", "Votes": sum([int(''.join(filter(str.isdigit, l))) for l in extracted_lines if any(c.isdigit() for c in l) and len(''.join(filter(str.isdigit, l))) <= 6])}]
+            total_votes = sum([c["Votes"] for c in parsed_candidates])
+
+        detailed_extractions[filename] = parsed_candidates
 
         batch_results.append({
             "Form / File Name": filename,
-            "Detected Votes": station_total,
-            "Audit Status": "PASSED ✅" if station_total > 0 else "REVIEW ⚠️",
-            "Lines Extracted": len(extracted_lines)
+            "Total Valid Votes": total_votes,
+            "Audit Status": "PASSED ✅" if total_votes > 0 else "REVIEW ⚠️",
+            "Entries Tracked": len(parsed_candidates)
         })
         
         progress_bar.progress((idx + 1) / total_images)
@@ -82,11 +103,20 @@ if uploaded_files:
         key="master_audit_table"
     )
 
-    # Master Metrics
+    # Detailed Form Inspector
     st.markdown("---")
+    st.subheader("🔍 Individual Form Deep-Dive & Candidate Breakdown")
+    selected_form = st.selectbox("Select a processed form to inspect extracted candidate lines:", list(detailed_extractions.keys()))
+    
+    if selected_form:
+        ind_df = pd.DataFrame(detailed_extractions[selected_form])
+        st.dataframe(ind_df, use_container_width=True)
+
+    # Master Metrics
+    st.markdown---()
     m1, m2, m3 = st.columns(3)
     m1.metric(label="Total Forms Processed", value=f"{total_images} Forms")
-    m2.metric(label="Aggregate Computed Tallies", value=f"{edited_batch_df['Detected Votes'].sum():,}")
+    m2.metric(label="Aggregate Computed Tallies", value=f"{edited_batch_df['Total Valid Votes'].sum():,}")
     m3.metric(label="Engine Status", value="100% Operational")
 
     # Master Export CSV
@@ -102,6 +132,7 @@ if uploaded_files:
     )
 else:
     st.info("👆 Upload your image files or a .ZIP archive to run batch analysis.")
+
 
 
  
