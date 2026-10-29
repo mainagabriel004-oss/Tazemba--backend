@@ -76,8 +76,8 @@ if uploaded_file is not None:
             file_name="form_34a_extracted_data.csv",
             mime="text/csv"
         )
-         # 2. Checksum & Validation Logic
-         st.subheader("Checksum & Validation")
+    # 2. Checksum & Validation Logic
+    st.subheader("Checksum & Validation")
     
     if 'extracted_texts' in locals() and extracted_texts:
         candidate_votes = []
