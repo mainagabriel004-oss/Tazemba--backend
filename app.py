@@ -21,9 +21,6 @@ st.write("Upload a scanned or photographed Form 34A document to instantly extrac
 def load_reader():
     return easyocr.Reader(['en'], gpu=False)
 
-with st.spinner("Initializing Tazemba OCR Engine..."):
-    reader = load_reader()
-
 uploaded_file = st.file_uploader("Upload Form 34A Image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
@@ -41,6 +38,7 @@ if uploaded_file is not None:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             
             st.write("Step 2: Executing EasyOCR text and digit extraction...")
+            reader = load_reader()
             results = reader.readtext(gray)
             time.sleep(1)
             
