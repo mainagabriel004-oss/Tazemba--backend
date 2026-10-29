@@ -167,10 +167,10 @@ if uploaded_files:
                     try:
                         candidate_sum = 0
                         stated_total = 0
+                        audit_status_text = "PASSED"
                         
                         for index, row in edited_df.iterrows():
                             row_text = str(row["Candidate Name / Row"]).upper()
-                            # Clean numeric string from votes column
                             vote_val_str = re.sub(r'\D', '', str(row["Votes Obtained"]))
                             vote_val = int(vote_val_str) if vote_val_str else 0
 
@@ -185,14 +185,37 @@ if uploaded_files:
                         m_col1.metric("Calculated Candidate Sum", candidate_sum)
                         m_col2.metric("Stated Form Total", stated_total)
 
-                        # Trigger Discrepancy Alert if math fails
                         if candidate_sum == stated_total:
                             st.success("✅ **AUDIT STATUS: PASSED** — Candidate vote tallies perfectly match the stated total valid votes cast.")
+                            audit_status_text = "PASSED"
                         else:
                             st.error(f"🚨 **AUDIT ALERT: MATH DISCREPANCY DETECTED!** Calculated sum ({candidate_sum}) does not match stated form total ({stated_total}). Please verify handwriting or data entries.")
+                            audit_status_text = "DISCREPANCY DETECTED"
+
+                        # --- OPTION A: EXPORTABLE AUDIT CERTIFICATE / CSV REPORT ---
+                        st.markdown("---")
+                        st.markdown("#### 📄 Official Audit Certificate & Data Export")
+                        
+                        # Prepare CSV export payload
+                        csv_data = edited_df.copy()
+                        csv_data["Audit File Name"] = selected_file
+                        csv_data["Calculated Sum"] = candidate_sum
+                        csv_data["Stated Total"] = stated_total
+                        csv_data["Final Status"] = audit_status_text
+                        
+                        csv_buffer = csv_data.to_csv(index=False).encode('utf-8')
+
+                        st.download_button(
+                            label="📥 Download Certified Audit Report (CSV)",
+                            data=csv_buffer,
+                            file_name=f"Audit_Report_{selected_file}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
 
                     except Exception as e:
                         st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
