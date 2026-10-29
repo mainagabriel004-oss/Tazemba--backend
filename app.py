@@ -24,7 +24,7 @@ uploaded_file = st.file_uploader("Upload Form 34A Image", type=["jpg", "jpeg", "
 if uploaded_file is not None:
     # Read image
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1.ch := 1) # Color decode
+    image = cv2.imdecode(file_bytes, 1) # Color decode
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
     st.image(image_rgb, caption="Uploaded Form 34A Document", use_column_width=True)
