@@ -33,9 +33,10 @@ if uploaded_file is not None:
     st.image(image_rgb, caption="Uploaded Form 34A Document", use_column_width=True)
 
     if st.button("🚀 Run Automated Extraction & Verification"):
-           reader = load_reader()
+           
  
         with st.status("Processing Form Data...", expanded=True) as status:
+            reader = load_reader()
             st.write("Step 1: Running OpenCV image preprocessing...")
             time.sleep(1)
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
