@@ -2,7 +2,8 @@ import streamlit as st
 import cv2
 import numpy as np
 import pandas as pd
-import easyocr
+from rapidocr_onnxruntime import RapidOCR
+
 import time
 
 st.set_page_config(
@@ -19,7 +20,8 @@ st.write("Upload a scanned or photographed Form 34A document to instantly extrac
 # Cached EasyOCR Reader Initialization (Prevents timeout/memory crashes on Streamlit Cloud)
 @st.cache_resource
 def load_reader():
-  return easyocr.Reader(['en'], gpu=False) 
+          return RapidOCR()
+
 
 
 uploaded_file = st.file_uploader("Upload Form 34A Image", type=["jpg", "jpeg", "png"])
@@ -41,10 +43,10 @@ if uploaded_file is not None:
             time.sleep(1)
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             
-            st.write("Step 2: Executing EasyOCR text and digit extraction...")
+            st.write("Step 2: Executing RapidOCR text analysis...")
     
-            results = reader.readtext(gray)
-            time.sleep(1)
+            results, _ = reader(gray)
+         time.sleep(1)
             
             st.write("Step 3: Performing mathematical cross-verification...")
             time.sleep(1)
