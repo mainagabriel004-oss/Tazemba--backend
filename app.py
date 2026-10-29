@@ -51,9 +51,16 @@ if uploaded_files:
         status_text.text(f"Parsing form {idx + 1} of {total_images}: {filename}...")
         
                # OpenCV-Powered Image Processing & Extraction
-                # Decode raw bytes into an OpenCV image matrix
-        nparr = np.frombuffer(img, np.uint8)
-        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        # Universal image loader (handles PIL, bytes, or numpy arrays automatically)
+        if isinstance(img, Image.Image):
+            img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        elif isinstance(img, bytes):
+            nparr = np.frombuffer(img, np.uint8)
+            img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        elif isinstance(img, np.ndarray):
+            img_cv = img
+        else:
+            img_cv = None
         
         parsed_candidates = []
         total_votes = 0
@@ -74,6 +81,7 @@ if uploaded_files:
         else:
             parsed_candidates = [{"Candidate": "Station Aggregate / Total", "Votes": 0}]
             total_votes = 0
+
 
  
 
