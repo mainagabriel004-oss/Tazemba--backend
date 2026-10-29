@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # App Header & Branding
-st.title("🛡️ Polsia Form 34A Audit Engine")
+st.title("🛡️ Tazemba Form 34A Audit Engine")
 st.markdown("### **Automated Election Document Verification & Checksum Compliance Tool**")
 st.write("Upload a scanned or photographed Form 34A to run automated OCR extraction, candidate mapping, and checksum verification.")
 st.markdown("---")
