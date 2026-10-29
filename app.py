@@ -48,7 +48,9 @@ if uploaded_files:
             img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
             if img_cv is not None:
-                # 1. Image Preprocessing for Table Layout Analysis
+                img_height, img_width = img_cv.shape[:2]
+
+                # 1. Enhanced Image Preprocessing for Clean Feature Isolation
                 gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
                 blurred = cv2.GaussianBlur(gray, (5, 5), 0)
                 thresh = cv2.adaptiveThreshold(
@@ -56,18 +58,24 @@ if uploaded_files:
                 )
 
                 # 2. Dynamic Grid Line Detection (Horizontal Table Boundaries)
-                horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1))
+                horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (30, 1))
                 horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
 
-                # 3. Detect Bounding Box Contours for Candidate Table Rows
+                # 3. Detect Contours with Strict Region Filtering
                 contours, _ = cv2.findContours(horizontal_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 
                 annotated_img = img_cv.copy()
+                
+                # Define Y-axis boundaries for the candidate section (middle band of the form)
+                # This explicitly blocks header and footer noise from being boxed
+                y_min_bound = int(img_height * 0.18)
+                y_max_bound = int(img_height * 0.48)
+
                 for c in contours:
                     x, y, w, h = cv2.boundingRect(c)
-                    if w > 150:  # Filter out minor noise lines
-                        # Draw green visual bounding boxes on detected rows
-                        cv2.rectangle(annotated_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    # Filter by width and ensure the box sits squarely inside the candidate block zone
+                    if w > (img_width * 0.4) and y_min_bound < y < y_max_bound:
+                        cv2.rectangle(annotated_img, (x, y), (x + w, y + h + 8), (0, 255, 0), 2)
 
                 # Convert annotated OpenCV image back to standard RGB for Streamlit preview
                 annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
@@ -118,7 +126,7 @@ if uploaded_files:
                     st.subheader("Visual Audit Overlay (CV Bounding Boxes)")
                     st.image(
                         parsed_extractions[selected_file]["annotated_image"],
-                        caption=f"OpenCV Detected Regions: {selected_file}",
+                        caption=f"Targeted Candidate ROI: {selected_file}",
                         use_column_width=True
                     )
 
@@ -133,6 +141,7 @@ if uploaded_files:
             m1.metric("Total Forms Processed", f"{len(processed_data)} Forms")
             total_aggregate = sum([row["Total Valid Votes"] for row in processed_data])
             m2.metric("Aggregate Computed Tallies", f"{total_aggregate:,}")
+
 
 
 
