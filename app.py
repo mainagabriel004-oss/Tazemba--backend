@@ -12,10 +12,12 @@ st.set_page_config(
     layout="centered"
 )
 
-# App Header
-st.title("🗳️ Tazemba Automated Tallying Engine")
-st.markdown("### AI-Powered Form 34A Extraction & Mathematical Verification")
-st.write("Upload a scanned or photographed Form 34A document to instantly extract candidate votes, verify totals, and flag discrepancies.")
+# App Header & Branding
+st.title("🛡️ Polsia Form 34A Audit Engine")
+st.markdown("### **Automated Election Document Verification & Checksum Compliance Tool**")
+st.write("Upload a scanned or photographed Form 34A to run automated OCR extraction, candidate mapping, and checksum verification.")
+st.markdown("---")
+
 
 # Cached EasyOCR Reader Initialization (Prevents timeout/memory crashes on Streamlit Cloud)
 @st.cache_resource
