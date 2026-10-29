@@ -1,7 +1,5 @@
 streamlit
 opencv-python-headless
-easyocr
-pandas
 numpy
-
+rapidocr-onnxruntime
 
