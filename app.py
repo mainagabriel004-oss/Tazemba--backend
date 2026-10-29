@@ -20,7 +20,7 @@ st.write("Upload a scanned or photographed Form 34A document to instantly extrac
 @st.cache_resource
 def load_reader():
     with st.spinner("Downloading AI model files (happens only once)..."):
-    return easyocr.Reader(['en'], gpu=False)
+      return easyocr.Reader(['en'], gpu=False) 
 
 uploaded_file = st.file_uploader("Upload Form 34A Image", type=["jpg", "jpeg", "png"])
 
