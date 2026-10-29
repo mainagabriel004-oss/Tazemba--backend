@@ -113,7 +113,7 @@ if uploaded_files:
         st.dataframe(ind_df, use_container_width=True)
 
     # Master Metrics
-    st.markdown---()
+    st.markdown("---")
     m1, m2, m3 = st.columns(3)
     m1.metric(label="Total Forms Processed", value=f"{total_images} Forms")
     m2.metric(label="Aggregate Computed Tallies", value=f"{edited_batch_df['Total Valid Votes'].sum():,}")
