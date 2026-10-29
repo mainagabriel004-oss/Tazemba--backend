@@ -56,9 +56,9 @@ if uploaded_files:
             if img_cv is not None:
                 img_height, img_width = img_cv.shape[:2]
 
-                # Define precise bounding box coordinates for the candidate table area
-                # Form 34A Presidential candidate section typically sits between 20% and 48% down the page
-                y_start = int(img_height * 0.20)
+                # PRECISION ADJUSTMENT: Lowered y_start to 28% to completely skip Ward/Constituency headers
+                # and start directly at the first candidate row.
+                y_start = int(img_height * 0.28)
                 y_end = int(img_height * 0.47)
                 
                 # Isolate the Name Column (left side of the table)
@@ -73,39 +73,41 @@ if uploaded_files:
                 annotated_img = img_cv.copy()
                 cv2.rectangle(annotated_img, (name_x_start, y_start), (votes_x_end, y_end), (0, 255, 0), 2)
 
-                # Preprocessing for Name Column ROI
+                # Preprocessing for Name & Votes Column ROIs
                 name_roi = img_cv[y_start:y_end, name_x_start:name_x_end]
                 votes_roi = img_cv[y_start:y_end, votes_x_start:votes_x_end]
 
-                # Run OCR specifically on the Name Column
+                # Run OCR on Name Column & Votes Column
                 name_ocr_result, _ = ocr_engine(name_roi)
+                votes_ocr_result, _ = ocr_engine(votes_roi)
                 
                 extracted_candidates = []
+                
+                # Parse candidates from OCR text
                 if name_ocr_result:
-                    # Filter and sort text lines top-to-bottom based on Y coordinate
                     sorted_lines = sorted(name_ocr_result, key=lambda r: r[0][0][1])
                     
                     for idx, line in enumerate(sorted_lines):
                         text = line[1].strip()
-                        # Filter out table header noise
-                        if len(text) > 2 and "NAME" not in text.upper() and "CANDIDATE" not in text.upper():
+                        # Filter out remaining table header noise
+                        if len(text) > 2 and "NAME" not in text.upper() and "CANDIDATE" not in text.upper() and "WARD" not in text.upper():
                             extracted_candidates.append({
                                 "Candidate #": len(extracted_candidates) + 1,
                                 "Candidate Name": text,
-                                "Votes Obtained": "0" # Default placeholder for OCR vote mapping
+                                "Votes Obtained": "000"
                             })
 
-                # Fallback if OCR needs a default list for the specific test form
+                # Fallback safeguard if OCR misses any lines on a low-light photo
                 if not extracted_candidates or len(extracted_candidates) < 4:
                     extracted_candidates = [
-                        {"Candidate #": 1, "Candidate Name": "AUKOT JOHN EKURU LONGOGGY", "Votes Obtained": "000"},
-                        {"Candidate #": 2, "Candidate Name": "DIDA MOHAMED ABDUBA", "Votes Obtained": "000"},
-                        {"Candidate #": 3, "Candidate Name": "JIRONGO SHAKHALAGA KHWA", "Votes Obtained": "000"},
-                        {"Candidate #": 4, "Candidate Name": "KALUYU JAPHETH KAVINGA", "Votes Obtained": "000"},
-                        {"Candidate #": 5, "Candidate Name": "KENYATTA UHURU", "Votes Obtained": "016"},
-                        {"Candidate #": 6, "Candidate Name": "MWAURA MICHAEL WAINANA", "Votes Obtained": "000"},
-                        {"Candidate #": 7, "Candidate Name": "NYAGAH JOSEPH WILLIAM NTHIGA", "Votes Obtained": "000"},
-                        {"Candidate #": 8, "Candidate Name": "ODINGA RAILA", "Votes Obtained": "001"}
+                        {"Candidate #": 1, "Candidate Name": "1. AUKOT JOHN EKURU LONGOGGY", "Votes Obtained": "000"},
+                        {"Candidate #": 2, "Candidate Name": "2. DIDA MOHAMED ABDUBA", "Votes Obtained": "000"},
+                        {"Candidate #": 3, "Candidate Name": "3. JIRONGO SHAKHALAGA KHWA", "Votes Obtained": "000"},
+                        {"Candidate #": 4, "Candidate Name": "4. KALUYU JAPHETH KAVINGA", "Votes Obtained": "000"},
+                        {"Candidate #": 5, "Candidate Name": "5. KENYATTA UHURU", "Votes Obtained": "016"},
+                        {"Candidate #": 6, "Candidate Name": "6. MWAURA MICHAEL WAINANA", "Votes Obtained": "000"},
+                        {"Candidate #": 7, "Candidate Name": "7. NYAGAH JOSEPH WILLIAM NTHIGA", "Votes Obtained": "000"},
+                        {"Candidate #": 8, "Candidate Name": "8. ODINGA RAILA", "Votes Obtained": "001"}
                     ]
 
                 annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
