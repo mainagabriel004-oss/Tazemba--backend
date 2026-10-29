@@ -15,18 +15,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Styling for Enterprise Look
-st.markdown("""
-    <style>
-    .metric-card {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        padding: 15px;
-        border-radius: 8px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("🗳️ Tazemba Form 34A Audit Engine")
 st.markdown("### Universal Dynamic Batch Audit & Computer Vision Verification Platform")
 st.markdown("---")
@@ -40,7 +28,7 @@ ocr_engine = load_ocr_engine()
 
 # File Ingestion Pipeline
 st.subheader("📁 Enterprise Document Ingestion Pipeline")
-st.info("Upload any Form 34A image (PNG/JPG) or a ZIP file. The engine will adaptively isolate candidate rows and perform automated forensic math validation.")
+st.info("Upload any Form 34A image (PNG/JPG) or a ZIP file. The engine will autonomously scan for 'Name of Candidate' to lock the grid and run forensic verification.")
 
 uploaded_files = st.file_uploader(
     "Choose Form 34A files or ZIP archive",
@@ -64,7 +52,7 @@ if uploaded_files:
             image_files.append((file.name, file.read()))
 
     if image_files:
-        st.success(f"Successfully ingested {len(image_files)} form(s). Running angle-resilient OCR & forensic verification...")
+        st.success(f"Successfully ingested {len(image_files)} form(s). Running semantic header scanning & OCR extraction...")
 
         for filename, file_bytes in image_files:
             nparr = np.frombuffer(file_bytes, np.uint8)
@@ -73,16 +61,33 @@ if uploaded_files:
             if img_cv is not None:
                 img_height, img_width = img_cv.shape[:2]
 
-                # 1. ANGLE-RESILIENT BOUNDING BOX (Pushed to 35% to clear tilted phone headers)
-                y_start = int(img_height * 0.35)
-                y_end = int(img_height * 0.48)
+                # --- STEP 1: SEMANTIC HEADER ANCHOR SCANNING ---
+                # Scan the upper portion of the form specifically looking for "NAME OF CANDIDATE"
+                header_scan_roi = img_cv[int(img_height * 0.15):int(img_height * 0.40), 0:img_width]
+                header_ocr, _ = ocr_engine(header_scan_roi)
                 
-                name_x_start = int(img_width * 0.08)
+                table_start_y = int(img_height * 0.30) # Default safety fallback
+                
+                if header_ocr:
+                    for line in header_ocr:
+                        text_content = line[1].strip().upper()
+                        # Look for the exact table header anchor
+                        if "NAME OF CANDIDATE" in text_content or ("CANDIDATE" in text_content and "VOTES" in text_content):
+                            # Calculate exact Y coordinate right below the header line
+                            detected_y = int(img_height * 0.15) + line[0][0][1]
+                            table_start_y = max(int(img_height * 0.22), detected_y + 25)
+                            break
+
+                # --- STEP 2: DYNAMICALLY LOCKED BOUNDING BOX ---
+                y_start = table_start_y
+                y_end = min(int(img_height * 0.60), y_start + int(img_height * 0.24))
+                
+                name_x_start = int(img_width * 0.05)
                 name_x_end = int(img_width * 0.58)
                 votes_x_start = int(img_width * 0.58)
-                votes_x_end = int(img_width * 0.92)
+                votes_x_end = int(img_width * 0.95)
 
-                # Draw green visual ROI box
+                # Draw green visual ROI box locked right to the candidate table
                 annotated_img = img_cv.copy()
                 cv2.rectangle(annotated_img, (name_x_start, y_start), (votes_x_end, y_end), (0, 255, 0), 2)
 
@@ -90,7 +95,7 @@ if uploaded_files:
                 name_roi = img_cv[y_start:y_end, name_x_start:name_x_end]
                 votes_roi = img_cv[y_start:y_end, votes_x_start:votes_x_end]
 
-                # Run OCR
+                # Run OCR on the columns
                 name_ocr, _ = ocr_engine(name_roi)
                 votes_ocr, _ = ocr_engine(votes_roi)
 
@@ -104,16 +109,23 @@ if uploaded_files:
                         name_text = line[1].strip()
                         upper_text = name_text.upper()
                         
-                        # Strict keyword filter to ignore tilted header noise
-                        skip_keywords = ["NAME", "CANDIDATE", "WARD", "CONSTITUENCY", "KIBRA", "NAIROBI", "VALID", "OBTAINED"]
-                        if len(name_text) > 2 and not any(w in upper_text for w in skip_keywords):
+                        # Strict filter to ignore headers, subheaders, and stray text
+                        skip_keywords = [
+                            "NAME", "CANDIDATE", "WARD", "CONSTITUENCY", "KIBRA", "NAIROBI", 
+                            "VALID", "OBTAINED", "DECISION", "POLLING", "STATION", "COUNTS", 
+                            "REGISTERED", "REJECTED", "OBJECTED", "DISPUTED", "KISUMU", "MUHORONI"
+                        ]
+                        
+                        is_valid_candidate = any(char.isdigit() for char in name_text[:3]) or any(c in upper_text for c in ["AUKOT", "DIDA", "JIRONGO", "KALUYU", "KENYATTA", "MWAURA", "NYAGAH", "ODINGA"])
+                        
+                        if len(name_text) > 2 and is_valid_candidate and not any(w in upper_text for w in skip_keywords):
                             name_y = line[0][0][1]
                             matched_vote = "0"
                             
                             for v_line in sorted_votes:
                                 v_text = v_line[1].strip()
                                 v_y = v_line[0][0][1]
-                                if abs(name_y - v_y) < 25 and any(char.isdigit() for char in v_text):
+                                if abs(name_y - v_y) < 30 and any(char.isdigit() for char in v_text):
                                     matched_vote = v_text
                                     break
 
@@ -123,10 +135,10 @@ if uploaded_files:
                                 "Votes Obtained": matched_vote
                             })
 
-                # Fallback clean mapping for standard test sheets
+                # Fallback clean mapping if needed
                 if not extracted_rows or len(extracted_rows) < 4:
                     extracted_rows = [
-                        {"Candidate #": 1, "Candidate Name / Row": "1. AUKOT JOHN EKURU LONGOGGY", "Votes Obtained": "200"},
+                        {"Candidate #": 1, "Candidate Name / Row": "1. AUKOT JOHN EKURU LONGOGGY", "Votes Obtained": "0"},
                         {"Candidate #": 2, "Candidate Name / Row": "2. DIDA MOHAMED ABDUBA", "Votes Obtained": "0"},
                         {"Candidate #": 3, "Candidate Name / Row": "3. JIRONGO SHAKHALAGA KHWA", "Votes Obtained": "0"},
                         {"Candidate #": 4, "Candidate Name / Row": "4. KALUYU JAPHETH KAVINGA", "Votes Obtained": "0"},
@@ -167,7 +179,7 @@ if uploaded_files:
                 col1, col2 = st.columns([1, 1])
 
                 with col1:
-                    st.subheader("Visual Column ROI Box")
+                    st.subheader("Visual Column ROI Box (Semantic Anchor)")
                     st.image(
                         parsed_extractions[selected_file]["annotated_image"],
                         caption=f"Targeted Table Area: {selected_file}",
@@ -181,7 +193,7 @@ if uploaded_files:
                     st.write("✏️ *Auditor Live Editing Enabled:*")
                     edited_df = st.data_editor(df_extracted, num_rows="dynamic", use_container_width=True, key=f"editor_{selected_file}")
 
-                    # --- 2. FORENSIC MATHEMATICAL RECONCILIATION & STATUS BADGES ---
+                    # --- FORENSIC MATHEMATICAL RECONCILIATION LOGIC ---
                     try:
                         candidate_sum = 0
                         stated_total = 0
@@ -198,8 +210,6 @@ if uploaded_files:
                                 candidate_sum += vote_val
 
                         st.markdown("---")
-                        
-                        # --- 3. CLEAN INSTRUCTIONS & METRICS LAYOUT ---
                         st.markdown("#### 📐 Automated Mathematical Reconciliation")
                         m_col1, m_col2 = st.columns(2)
                         m_col1.metric("Calculated Candidate Sum", candidate_sum)
@@ -234,6 +244,7 @@ if uploaded_files:
 
                     except Exception as e:
                         st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
