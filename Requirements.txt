@@ -1,9 +1,7 @@
+streamlit
+opencv-python-headless
+easyocr
+pandas
+numpy
 
---extra-index-url https://download.pytorch.org/whl/cpu
-fastapi
-uvicorn
-ultralytics
-pillow
-python-multipart
-torch
 
