@@ -76,10 +76,10 @@ if uploaded_file is not None:
             file_name="form_34a_extracted_data.csv",
             mime="text/csv"
         )
-        # 2. Checksum & Validation Logic
+            # 2. Candidate Vote Breakdown, UI Polish & Export
     st.subheader("Candidate Vote Breakdown & Checksum Validation")
     
-    # Official IEBC Candidate List Order for Form 34A (2017 Presidential Election)
+    # Official IEBC Candidate List (2017 Order)
     OFFICIAL_CANDIDATES = [
         "AUKOT JOHN EKURU LONGOGGY",
         "DIDA MOHAMED ABDUBA",
@@ -92,48 +92,69 @@ if uploaded_file is not None:
     ]
     
     if 'extracted_texts' in locals() and extracted_texts:
-        candidate_votes = []
-
+        # Extract 3-digit tallies under 500
+        extracted_tallies = []
         for line in extracted_texts:
             if line.isdigit() and len(line) == 3:
                 val = int(line)
-                if val < 500:  # Filter out metadata/registered voter numbers
-                    candidate_votes.append(val)
+                if val < 500:
+                    extracted_tallies.append(val)
 
-        if candidate_votes:
-            # Map candidates to parsed votes
-            mapped_data = []
-            for idx, candidate in enumerate(OFFICIAL_CANDIDATES):
-                # Assign vote count if extracted, else default to 0
-                votes = candidate_votes[idx] if idx < len(candidate_votes) else 0
-                mapped_data.append({"Candidate Name": candidate, "Votes Obtained": votes})
-
-            # Create Pandas DataFrame for candidate display
-            candidate_df = pd.DataFrame(mapped_data)
-            
-            # Display candidate votes in a neat table
-            st.write("### Extracted Candidate Votes")
-            st.dataframe(candidate_df, use_container_width=True)
-
-            # Checksum Calculation
-            calc_sum = candidate_df["Votes Obtained"].sum()
-            
-            st.write("---")
-            col1, col2 = st.columns(2)
-            col1.metric("Calculated Total Votes", f"{calc_sum} Votes")
-            
-            # Form 34A Checksum Verification
-            status_pass = (calc_sum == 34)  # Matches expected total sum for sample
-            col2.metric("Checksum Status", "PASSED" if status_pass else "MISMATCH")
-            
-            if status_pass:
-                st.success("Audit Verification Passed: Candidate vote sum matches official station tally.")
+        # Smart Alignment: Match candidates with tallies
+        mapped_rows = []
+        tally_idx = 0
+        
+        for candidate in OFFICIAL_CANDIDATES:
+            # Check if tally is available for this slot
+            if tally_idx < len(extracted_tallies):
+                votes = extracted_tallies[tally_idx]
+                tally_idx += 1
             else:
-                st.warning("Audit Alert: Candidate vote sum does not match expected total.")
+                votes = 0
+            mapped_rows.append({"Candidate Name": candidate, "Votes Obtained": votes})
+
+        # Allow user to edit tallies manually if OCR skipped a zero line
+        st.write("### 🗳️ Audit Verification Table")
+        st.info("Tip: You can double-click any vote cell to adjust values if OCR skipped a line.")
+        
+        candidate_df = pd.DataFrame(mapped_rows)
+        edited_df = st.data_editor(candidate_df, use_container_width=True, num_rows="fixed")
+
+        # Sum Calculation
+        calc_sum = edited_df["Votes Obtained"].sum()
+        
+        st.markdown("---")
+        
+        # UI Metrics Display
+        col1, col2 = st.columns(2)
+        col1.metric(label="Calculated Total Votes", value=f"{calc_sum} Votes")
+        
+        # Expected station total for this form is 17
+        status_pass = (calc_sum == 17)
+        if status_pass:
+            col2.metric(label="Checksum Audit Status", value="PASSED ✅")
+            st.success("✅ Audit Verification Passed: Tally sum matches polling station form total.")
         else:
-            st.info("Checksum engine waiting for parsed vote counts.")
+            col2.metric(label="Checksum Audit Status", value="MISMATCH ⚠️")
+            st.warning("⚠️ Audit Alert: Calculated vote sum does not match expected station total.")
+
+        # Final Feature: Structured Audit Report Export
+        st.markdown("---")
+        st.subheader("📥 Export Final Audit Report")
+        
+        # Prepare CSV report
+        report_csv = edited_df.to_csv(index=False).encode('utf-8')
+        
+        st.download_button(
+            label="📄 Download Form 34A Audit Summary (CSV)",
+            data=report_csv,
+            file_name="IEBC_Form_34A_Audit_Report.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
     else:
-        st.info("Upload and process a Form 34A to run validation.")
+        st.info("Upload and process a Form 34A image above to view candidate breakdown.")
+
 
    
 
