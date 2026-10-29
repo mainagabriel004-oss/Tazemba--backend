@@ -59,26 +59,26 @@ if uploaded_files:
         total_votes = 0
         
         for line in extracted_lines:
-            # Look for lines that contain letters (potential names) and numbers (votes)
-            if any(c.isalpha() for c in line) and any(c.isdigit() for c in line):
-                # Clean and split tokens to separate candidate text from trailing numbers
+            if any(c.isdigit() for c in line):
                 tokens = line.split()
-                digits_found = [t for t in tokens if t.isdigit() and len(t) <= 5]
+                digits = [t for t in tokens if t.isdigit() and len(t) <= 6]
                 
-                if digits_found:
-                    vote_val = int(digits_found[-1]) # Usually the last digit block is the tally
-                    name_part = " ".join([t for t in tokens if not t.isdigit() or t != digits_found[-1]])
+                if digits:
+                    vote_val = int(digits[-1])
+                    name_tokens = [t for t in tokens if t != digits[-1]]
+                    candidate_name = " ".join(name_tokens).strip()
                     
-                    if len(name_part) > 2: # Filter out noise
-                        parsed_candidates.append({"Candidate": name_part, "Votes": vote_val})
+                    if len(candidate_name) > 1:
+                        parsed_candidates.append({"Candidate": candidate_name, "Votes": vote_val})
                         total_votes += vote_val
 
-        # Fallback if strict name parsing finds nothing on raw low-res test images
+                # Fallback if no structured rows were matched
         if not parsed_candidates:
-            parsed_candidates = [{"Candidate": "General Station Total", "Votes": sum([int(''.join(filter(str.isdigit, l))) for l in extracted_lines if any(c.isdigit() for c in l) and len(''.join(filter(str.isdigit, l))) <= 6])}]
+            parsed_candidates = [{"Candidate": "Station Aggregate / Total", "Votes": sum([int(''.join(filter(str.isdigit, l))) for l in extracted_lines if any(c.isdigit() for c in l) and len(''.join(filter(str.isdigit, l))) <= 6])}]
             total_votes = sum([c["Votes"] for c in parsed_candidates])
 
         detailed_extractions[filename] = parsed_candidates
+
 
         batch_results.append({
             "Form / File Name": filename,
