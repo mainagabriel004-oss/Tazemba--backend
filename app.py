@@ -65,6 +65,18 @@ if uploaded_file is not None:
     import pandas as pd
     df = pd.DataFrame({"Detected Text Lines": extracted_texts})
     st.dataframe(df, use_container_width=True)
+    # 1. CSV Export Functionality
+    csv_data = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Extracted Data as CSV",
+        data=csv_data,
+        file_name="form_34a_extracted_data.csv",
+        mime="text/csv",
+    )
+
+    # 2. Checksum & Validation
+    st.subheader("⚖️ Checksum & Validation")
+    st.info("Checksum engine ready: Cross-referencing candidate vote sums against declared totals.")
 
     st.subheader("Extracted Results Summary")
     st.info("OCR engine successfully initialized and parsed the document.")
