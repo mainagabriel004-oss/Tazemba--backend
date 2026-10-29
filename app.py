@@ -64,7 +64,7 @@ if uploaded_file is not None:
 
     import pandas as pd
     df = pd.DataFrame({"Detected Text Lines": extracted_texts})
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, use_container_width='stretch)
     # 1. CSV Export Functionality
     csv_data = df.to_csv(index=False).encode('utf-8')
     st.download_button(
