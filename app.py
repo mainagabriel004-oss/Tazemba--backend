@@ -54,6 +54,20 @@ if uploaded_file is not None:
             status.update(label="Extraction Complete!", state="complete", expanded=False)
         
         st.success("Form processed successfully!")
+            # Extract text items from RapidOCR results
+    extracted_texts = []
+    if results:
+      for item in results:
+        text_val = item[1] if len(item) > 1 else str(item)
+        extracted_texts.append(text_val)
+
+    st.subheader("📋 Raw Extracted Text Lines")
+
+    import pandas as pd
+
+    df = pd.DataFrame({"Detected Text Lines": extracted_texts})
+    st.dataframe(df, use_container_width=True)
+
         st.subheader("Extracted Results Summary")
         st.info("OCR engine successfully initialized and parsed the document.")
 
