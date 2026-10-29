@@ -60,28 +60,23 @@ if uploaded_file is not None:
                 text_val = item[1] if len(item) > 1 else str(item)
                 extracted_texts.append(text_val)
 
+            # Only show results and export if text has actually been extracted
+    if 'extracted_texts' in locals() and extracted_texts:
         st.subheader("Raw Extracted Text Lines")
 
-    import pandas as pd
-    df = pd.DataFrame({"Detected Text Lines": extracted_texts})
-    st.dataframe(df, width='stretch')
+        import pandas as pd
+        df = pd.DataFrame({"Detected Text Lines": extracted_texts})
+        st.dataframe(df, width='stretch')
 
-    # CSV Export Functionality
-    csv_data = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Download Extracted Data as CSV",
-        data=csv_data,
-        file_name="form_34a_extracted_data.csv",
-        mime="text/csv"
-    )
+        # CSV Export Functionality
+        csv_data = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Extracted Data as CSV",
+            data=csv_data,
+            file_name="form_34a_extracted_data.csv",
+            mime="text/csv"
+        )
 
-
-    # 2. Checksum & Validation
-    st.subheader("⚖️ Checksum & Validation")
-    st.info("Checksum engine ready: Cross-referencing candidate vote sums against declared totals.")
-
-    st.subheader("Extracted Results Summary")
-    st.info("OCR engine successfully initialized and parsed the document.")
 
         
 
