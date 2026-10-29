@@ -70,12 +70,6 @@ if uploaded_file is not None:
         df = pd.DataFrame({"Detected Text Lines": extracted_texts})
         st.dataframe(df, width='stretch')
 
-        # CSV Export Functionality
-        csv_data = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Extracted Data as CSV",
-            data=csv_data,
-            file_name="form_34a_extracted_data.csv",
                 # 2. Dynamic Candidate Vote Extraction & Checksum Validation
     st.subheader("Candidate Vote Breakdown & Checksum Validation")
     
