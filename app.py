@@ -110,17 +110,20 @@ processed_data = []
 parsed_extractions = {}
 
 if all_sources:
-    if not st.session_state.is_admin:
-        if "last_processed_count" not in st.session_state or st.session_state.last_processed_count != len(all_sources):
-            st.session_state.trial_count += 1
-            st.session_state.last_processed_count = len(all_sources)
-
     st.markdown("---")
-    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running strict candidate table extraction...")
+    
+    # Controlled Trial Trigger: Only deduct trial when user explicitly clicks the run button
+    run_audit_clicked = st.button("🚀 Run Form 34A Forensic Extraction & Audit", type="primary", use_container_width=True)
 
+    if run_audit_clicked:
+        if not st.session_state.is_admin:
+            st.session_state.trial_count += 1
+        st.rerun()
+
+    # Process files once loaded
     for filename, file_bytes in all_sources:
         nparr = np.frombuffer(file_bytes, np.uint8)
-        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        img_cv = cv2.imdecode(nparr, np.IMREAD_COLOR)
 
         if img_cv is not None:
             img_height, img_width = img_cv.shape[:2]
@@ -131,11 +134,10 @@ if all_sources:
             ocr_input_img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
             annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            # Step 1: Scan full doc to locate the exact top header and bottom total lines as strict landmarks
             full_ocr, _ = ocr_engine(ocr_input_img)
             
-            top_y = int(img_height * 0.18)   # Safe default fallback
-            bottom_y = int(img_height * 0.42) # Safe default fallback
+            top_y = int(img_height * 0.16)   
+            bottom_y = int(img_height * 0.48) # Extended lower to safely catch row 8 & total votes
             stated_total_votes = "0"
 
             if full_ocr:
@@ -146,22 +148,20 @@ if all_sources:
 
                     if "NUMBER OF VOTES CAST IN FAVOUR" in upper_t or "NAME OF CANDIDATE" in upper_t:
                         if box_y < (img_height * 0.3):
-                            top_y = int(box_y + 25) # Start right below title header
+                            top_y = int(box_y + 20)
 
                     if "TOTAL NUMBER OF VALID VOTES CAST" in upper_t:
-                        if box_y > (img_height * 0.2):
-                            bottom_y = int(box_y + 15)
+                        if box_y > (img_height * 0.25):
+                            bottom_y = int(box_y + 50) # Give extra breathing room below total line
                             num_matches = re.findall(r'\d+', text)
                             if num_matches:
                                 stated_total_votes = num_matches[-1]
 
-            # Ensure proper crop box isolating ONLY the candidate rows
             if bottom_y <= top_y:
-                top_y = int(img_height * 0.18)
-                bottom_y = int(img_height * 0.42)
+                top_y = int(img_height * 0.16)
+                bottom_y = int(img_height * 0.48)
 
-            # Step 2: Crop precisely to the candidate block
-            table_roi = ocr_input_img[top_y:bottom_y, int(img_width * 0.05):int(img_width * 0.95)]
+            table_roi = ocr_input_img[top_y:bottom_y, int(img_width * 0.03):int(img_width * 0.97)]
             table_ocr, _ = ocr_engine(table_roi)
 
             extracted_rows = []
@@ -177,7 +177,7 @@ if all_sources:
                     box, text, score = item
                     box_y = box[0][1]
 
-                    if last_y == -1 or abs(box_y - last_y) < 20:
+                    if last_y == -1 or abs(box_y - last_y) < 22:
                         current_row.append(item)
                         if last_y == -1:
                             last_y = box_y
@@ -193,20 +193,18 @@ if all_sources:
                     full_row_text = " ".join([item[1] for item in group_sorted]).strip()
                     upper_text = full_row_text.upper()
 
-                    # Strict filter: Only accept lines that begin with a single digit 1 through 8
+                    # Match rows starting with digits 1 through 8
                     match_num = re.match(r'^([1-8])[\.\s]+(.*)', full_row_text)
                     if match_num:
                         c_num = int(match_num.group(1))
                         c_content = match_num.group(2).strip()
                         
-                        # Extract vote numbers at the tail end of the row
                         num_matches = re.findall(r'\d+', c_content)
                         vote_val = num_matches[-1] if num_matches else "0"
                         name_part = re.sub(r'\s+' + vote_val + r'$', '', c_content).strip()
                         if not name_part:
                             name_part = c_content
 
-                        # Filter out any accidental non-candidate text
                         if len(name_part) > 2 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
                             detected_candidates[c_num] = {
                                 "Candidate #": c_num,
@@ -224,7 +222,6 @@ if all_sources:
                     "Votes Obtained": "0"
                 })
 
-            # Append Official Total Valid Votes Row
             extracted_rows.append({
                 "Candidate #": len(extracted_rows) + 1,
                 "Candidate Name / Row": "Total number of valid votes cast",
@@ -234,7 +231,7 @@ if all_sources:
             processed_data.append({
                 "Form / File Name": filename,
                 "Parsed Rows": len(extracted_rows),
-                "Status": "🟢 STRICT SCAN READY"
+                "Status": "🟢 PRECISION SCAN READY"
             })
 
             parsed_extractions[filename] = {
@@ -299,7 +296,7 @@ if all_sources:
                         audit_status_text = "PASSED (🟢)"
                     else:
                         st.error(f"🚨 **AUDIT ALERT: MATH DISCREPANCY DETECTED!** Calculated sum ({candidate_sum}) does not match stated form total ({stated_total}).")
-                        audit_status_text = "DISCREPANCY DETECTED (🔴)"
+                        audit_status_text = "DISCREPANCY DETECTED (RED)"
 
                     # --- CERTIFIED REPORT EXPORT ---
                     st.markdown("---")
@@ -323,6 +320,7 @@ if all_sources:
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
