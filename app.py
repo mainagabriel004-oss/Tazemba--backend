@@ -218,67 +218,7 @@ if all_sources:
                 "Votes Obtained": stated_total_votes if stated_total_votes != "0" else "17"
             })
 
-
-            if table_ocr:
-                sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
-                rows_grouped = []
-                current_row = []
-                last_y = -1
-
-                for item in sorted_ocr:
-                    box, text, score = item
-                    box_y = box[0][1]
-
-                    if last_y == -1 or abs(box_y - last_y) < 22:
-                        current_row.append(item)
-                        if last_y == -1:
-                            last_y = box_y
-                    else:
-                        rows_grouped.append(current_row)
-                        current_row = [item]
-                        last_y = box_y
-                if current_row:
-                    rows_grouped.append(current_row)
-
-                for group in rows_grouped:
-                    group_sorted = sorted(group, key=lambda r: r[0][0][0])
-                    full_row_text = " ".join([item[1] for item in group_sorted]).strip()
-                    upper_text = full_row_text.upper()
-
-                    # Match rows starting with digits 1 through 8
-                    match_num = re.match(r'^([1-8])[\.\s]+(.*)', full_row_text)
-                    if match_num:
-                        c_num = int(match_num.group(1))
-                        c_content = match_num.group(2).strip()
-                        
-                        num_matches = re.findall(r'\d+', c_content)
-                        vote_val = num_matches[-1] if num_matches else "0"
-                        name_part = re.sub(r'\s+' + vote_val + r'$', '', c_content).strip()
-                        if not name_part:
-                            name_part = c_content
-
-                        if len(name_part) > 2 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
-                            detected_candidates[c_num] = {
-                                "Candidate #": c_num,
-                                "Candidate Name / Row": f"{c_num}. {name_part}",
-                                "Votes Obtained": vote_val
-                            }
-
-            if detected_candidates:
-                for c_num in sorted(detected_candidates.keys()):
-                    extracted_rows.append(detected_candidates[c_num])
-            else:
-                extracted_rows.append({
-                    "Candidate #": 1,
-                    "Candidate Name / Row": "Ensure form is well-lit and aligned in frame.",
-                    "Votes Obtained": "0"
-                })
-
-            extracted_rows.append({
-                "Candidate #": len(extracted_rows) + 1,
-                "Candidate Name / Row": "Total number of valid votes cast",
-                "Votes Obtained": stated_total_votes if stated_total_votes != "0" else "17"
-            })
+                    
 
             processed_data.append({
                 "Form / File Name": filename,
