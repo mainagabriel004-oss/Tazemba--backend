@@ -196,18 +196,19 @@ if all_sources:
                         continue
 
 
-                    match_num = re.search(r'\b([1-8])[\.\s]+([A-Z].*)', full_row_text)
-                    if match_num:
-                        c_num = int(match_num.group(1))
-                        c_content = match_num.group(2).strip()
-                        
-                        vote_matches = re.findall(r'\b(0\d\d|\d{3})\b', full_row_text)
-                        vote_val = vote_matches[-1] if vote_matches else "0"
+        match_num = re.search(r'\b([1-8])[\.\s]+([A-Za-z].*)', full_row_text)
+        if match_num:
+            c_num = int(match_num.group(1))
+            c_content = match_num.group(2).strip()
 
-                        
-                        name_part = re.sub(r'\s+\d+$', '', c_content).strip()
-                        if not name_part:
-                            name_part = c_content
+            vote_matches = re.findall(r'\b(0\d\d|\d{3})\b', full_row_text)
+            vote_val = vote_matches[-1] if vote_matches else "0"
+
+            # Strip trailing ID/serial numbers (4 or more digits) from candidate name
+            name_part = re.sub(r'[\d\s]{4,}.*', '', c_content).strip()
+            if not name_part:
+                name_part = c_content
+
 
                         if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
                             detected_candidates[c_num] = {
