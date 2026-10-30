@@ -3,8 +3,6 @@ import cv2
 import numpy as np
 import pandas as pd
 from PIL import Image
-import zipfile
-import io
 import re
 from rapidocr_onnxruntime import RapidOCR
 
@@ -16,7 +14,7 @@ st.set_page_config(
 )
 
 st.title("🗳️ Tazemba Form 34A Audit Engine")
-st.markdown("### Universal Dynamic Batch Audit & Smart Scanner Platform")
+st.markdown("### Universal Dynamic Batch Audit & Fully Template-Free OCR Platform")
 st.markdown("---")
 
 # Initialize Pure-Python Dynamic OCR Engine
@@ -32,14 +30,13 @@ if "camera_batch" not in st.session_state:
 
 # --- ENTERPRISE SMART SCANNER INGESTION PIPELINE ---
 st.subheader("📁 Enterprise Document Ingestion & Smart Scanner")
-st.info("Select multiple images from your gallery at once, or use the live scanner mode with smart lighting & angle guidance to capture multiple forms back-to-back.")
+st.info("Select multiple images from your gallery at once, or use the live scanner mode with smart lighting & angle guidance.")
 
-# Tabbed Ingestion Interface
 tab_upload, tab_camera = st.tabs(["📁 Multi-Image Gallery Upload", "📷 Smart Live Scanner (Multi-Shot)"])
 
 image_files = []
 
-# Mode 1: Multi-Image Gallery Upload (No ZIP required)
+# Mode 1: Multi-Image Gallery Upload
 with tab_upload:
     uploaded_files = st.file_uploader(
         "Select multiple Form 34A images (PNG/JPG)",
@@ -56,59 +53,45 @@ with tab_camera:
     camera_photo = st.camera_input("Position Form 34A in frame and take photo")
     
     if camera_photo:
-        # Convert camera buffer to OpenCV for Smart Quality Checks
         bytes_data = camera_photo.read()
         nparr = np.frombuffer(bytes_data, np.uint8)
         test_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         if test_img is not None:
-            # --- SMART GUIDANCE ALGORITHM (Lighting & Sharpness Check) ---
             gray = cv2.cvtColor(test_img, cv2.COLOR_BGR2GRAY)
             brightness = np.mean(gray)
             sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
 
-            # Display Real-time Guidance Feedback
             col_g1, col_g2 = st.columns(2)
             col_g1.metric("Lighting Level", f"{int(brightness)} / 255")
             col_g2.metric("Edge Sharpness", f"{int(sharpness)}")
 
-            is_lighting_good = brightness > 70  # Threshold for dim light
-            is_sharp_good = sharpness > 100     # Threshold for blur
-
-            if not is_lighting_good:
-                st.warning("⚠️ **Lighting Warning:** Environment is too dim. Move to a well-lit area or use flash.")
-            elif not is_sharp_good:
-                st.warning("⚠️ **Stability Warning:** Image looks blurry. Hold your phone steady.")
+            if brightness > 70 and sharpness > 100:
+                st.success("🟢 **Quality Check Passed:** Optimal lighting and clarity.")
             else:
-                st.success("🟢 **Quality Check Passed:** Optimal lighting and clarity. Ready to add to batch!")
+                st.warning("⚠️ **Warning:** Adjust lighting or hold device steady for better OCR extraction.")
 
-            # Multi-Shot Queue Button
             if st.button("➕ Add Captured Photo to Batch Queue", use_container_width=True):
                 shot_name = f"Live_Scan_{len(st.session_state.camera_batch) + 1}.jpg"
                 st.session_state.camera_batch.append((shot_name, bytes_data))
-                st.success(f"Added! Total queued from camera: {len(st.session_state.camera_batch)} form(s).")
+                st.success(f"Added! Total queued: {len(st.session_state.camera_batch)}")
 
-    # Display Queue Management
     if st.session_state.camera_batch:
         st.markdown("---")
-        st.markdown(f"**Current Camera Batch Queue:** {len(st.session_state.camera_batch)} form(s) stored.")
+        st.markdown(f"**Current Camera Batch Queue:** {len(st.session_state.camera_batch)} form(s).")
         if st.button("🗑️ Clear Camera Queue", type="secondary"):
             st.session_state.camera_batch = []
             st.rerun()
 
-# Combine both upload and camera queued files into final processing pool
-for item in image_files:
-    if item not in image_files: # Prevent duplicates if uploaded
-        pass
 all_sources = image_files + st.session_state.camera_batch
 
-# --- CORE PROCESSING PIPELINE ---
+# --- CORE FULLY DYNAMIC & TEMPLATE-FREE EXTRACTION PIPELINE ---
 processed_data = []
 parsed_extractions = {}
 
 if all_sources:
     st.markdown("---")
-    st.success(f"Successfully loaded {len(all_sources)} form(s). Running optical vote extraction & forensic verification...")
+    st.success(f"Successfully loaded {len(all_sources)} form(s). Running 100% dynamic OCR extraction...")
 
     for filename, file_bytes in all_sources:
         nparr = np.frombuffer(file_bytes, np.uint8)
@@ -117,55 +100,95 @@ if all_sources:
         if img_cv is not None:
             img_height, img_width = img_cv.shape[:2]
 
-            # Precision Crop: Targets candidate voting grid from top to bottom
-            y_start = int(img_height * 0.28)
-            y_end = int(img_height * 0.47)
+            # Dynamic Region: Covers the vertical span where candidate slots live on standard Form 34A layouts
+            y_start = int(img_height * 0.18)
+            y_end = int(img_height * 0.60)
             
-            name_x_start = int(img_width * 0.08)
-            name_x_end = int(img_width * 0.58)
-            votes_x_start = int(img_width * 0.58)
-            votes_x_end = int(img_width * 0.92)
-
-            # Draw green ROI bounding box
+            table_roi = img_cv[y_start:y_end, 0:img_width]
             annotated_img = img_cv.copy()
-            cv2.rectangle(annotated_img, (name_x_start, y_start), (votes_x_end, y_end), (0, 255, 0), 2)
+            cv2.rectangle(annotated_img, (int(img_width * 0.05), y_start), (int(img_width * 0.95), y_end), (0, 255, 0), 2)
 
-            # Isolate Votes Region for dynamic numerical extraction
-            votes_roi = img_cv[y_start:y_end, votes_x_start:votes_x_end]
-            votes_ocr, _ = ocr_engine(votes_roi)
+            # Run full OCR on the table block
+            table_ocr, _ = ocr_engine(table_roi)
 
-            # Parse extracted numbers by vertical order
-            extracted_vote_lines = []
-            if votes_ocr:
-                for v_line in sorted(votes_ocr, key=lambda r: r[0][0][1]):
-                    v_text = v_line[1].strip()
-                    v_y = v_line[0][0][1]
-                    clean_num = re.sub(r'\D', '', v_text)
-                    if clean_num or "0" in v_text:
-                        extracted_vote_lines.append((v_y, clean_num if clean_num else "0"))
+            extracted_rows = []
 
-            # Standard Statutory Form 34A Candidate Order
-            extracted_rows = [
-                {"Candidate #": 1, "Candidate Name / Row": "1. AUKOT JOHN EKURU LONGOGGY", "Votes Obtained": "0"},
-                {"Candidate #": 2, "Candidate Name / Row": "2. DIDA MOHAMED ABDUBA", "Votes Obtained": "0"},
-                {"Candidate #": 3, "Candidate Name / Row": "3. JIRONGO SHAKHALAGA KHWA", "Votes Obtained": "0"},
-                {"Candidate #": 4, "Candidate Name / Row": "4. KALUYU JAPHETH KAVINGA", "Votes Obtained": "0"},
-                {"Candidate #": 5, "Candidate Name / Row": "5. KENYATTA UHURU", "Votes Obtained": "0"},
-                {"Candidate #": 6, "Candidate Name / Row": "6. MWAURA MICHAEL WAINANA", "Votes Obtained": "0"},
-                {"Candidate #": 7, "Candidate Name / Row": "7. NYAGAH JOSEPH WILLIAM NTHIGA", "Votes Obtained": "0"},
-                {"Candidate #": 8, "Candidate Name / Row": "8. ODINGA RAILA", "Votes Obtained": "0"},
-                {"Candidate #": 9, "Candidate Name / Row": "Total number of valid votes cast", "Votes Obtained": "0"}
-            ]
+            if table_ocr:
+                # Cluster text fragments vertically by Y-coordinate lines
+                sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
+                
+                rows_grouped = []
+                current_row = []
+                last_y = -1
 
-            # Map OCR numerical vote tallies to corresponding candidates
-            for i, row in enumerate(extracted_rows[:-1]):
-                if i < len(extracted_vote_lines):
-                    row["Votes Obtained"] = extracted_vote_lines[i][1]
+                for item in sorted_ocr:
+                    box, text, score = item
+                    box_y = box[0][1] # Top-left Y coordinate
 
-            if len(extracted_vote_lines) >= len(extracted_rows):
-                extracted_rows[-1]["Votes Obtained"] = extracted_vote_lines[-1][1]
-            elif extracted_vote_lines:
-                extracted_rows[-1]["Votes Obtained"] = extracted_vote_lines[-1][1]
+                    if last_y == -1 or abs(box_y - last_y) < 25: # Dynamic line spacing tolerance
+                        current_row.append(item)
+                        if last_y == -1:
+                            last_y = box_y
+                    else:
+                        rows_grouped.append(current_row)
+                        current_row = [item]
+                        last_y = box_y
+                if current_row:
+                    rows_grouped.append(current_row)
+
+                candidate_counter = 1
+                for group in rows_grouped:
+                    # Sort horizontal elements left-to-right
+                    group_sorted = sorted(group, key=lambda r: r[0][0][0])
+                    full_row_text = " ".join([item[1] for item in group_sorted]).strip()
+                    upper_text = full_row_text.upper()
+
+                    # Exclude header text or stray metadata that aren't candidates or totals
+                    ignore_phrases = ["NAME OF CANDIDATE", "NO. OF VALID", "OBTAINED", "WARD", "CONSTITUENCY", "COUNTY", "POLLING STATION"]
+                    if any(p in upper_text for p in ignore_phrases):
+                        continue
+
+                    # Filter condition: identifies candidate rows or total summary rows
+                    is_valid_row = (
+                        any(char.isdigit() for char in full_row_text[:3]) or 
+                        "TOTAL" in upper_text or 
+                        "VALID VOTES" in upper_text
+                    )
+
+                    if is_valid_row and len(full_row_text) > 2:
+                        name_parts = []
+                        vote_candidates = []
+
+                        for item in group_sorted:
+                            txt = item[1].strip()
+                            # Separate numerical vote values on the right from text names on the left
+                            if re.sub(r'\D', '', txt) and len(txt) <= 5 and not any(c.isalpha() for c in txt):
+                                vote_candidates.append(txt)
+                            else:
+                                name_parts.append(txt)
+
+                        clean_name = " ".join(name_parts)
+                        clean_vote = vote_candidates[-1] if vote_candidates else "0"
+
+                        if "TOTAL" in upper_text or "VALID VOTES" in upper_text:
+                            row_label = "Total number of valid votes cast"
+                        else:
+                            row_label = clean_name if len(clean_name) > 3 else f"Candidate Row {candidate_counter}"
+                            candidate_counter += 1
+
+                        extracted_rows.append({
+                            "Candidate #": len(extracted_rows) + 1,
+                            "Candidate Name / Row": row_label,
+                            "Votes Obtained": clean_vote
+                        })
+
+            # Clean Fallback if OCR frame is unclear
+            if len(extracted_rows) < 2:
+                extracted_rows = [
+                    {"Candidate #": 1, "Candidate Name / Row": "1. [Dynamic Read Placeholder 1]", "Votes Obtained": "0"},
+                    {"Candidate #": 2, "Candidate Name / Row": "2. [Dynamic Read Placeholder 2]", "Votes Obtained": "0"},
+                    {"Candidate #": 3, "Candidate Name / Row": "Total number of valid votes cast", "Votes Obtained": "0"}
+                ]
 
             annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
 
@@ -197,10 +220,10 @@ if all_sources:
             col1, col2 = st.columns([1, 1])
 
             with col1:
-                st.subheader("Visual Column ROI Box")
+                st.subheader("Visual Table Scan Area")
                 st.image(
                     parsed_extractions[selected_file]["annotated_image"],
-                    caption=f"Targeted Table Area: {selected_file}",
+                    caption=f"Scanned Area: {selected_file}",
                     use_column_width=True
                 )
 
@@ -262,6 +285,7 @@ if all_sources:
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
