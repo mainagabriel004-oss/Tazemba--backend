@@ -102,13 +102,9 @@ with tab_camera:
             st.rerun()
 
 # Prevent duplicates and protect data on refresh
-seen_names = set()
-all_sources = []
-for name, data in (st.session_state.get('uploaded_batch', []) + st.session_state.get('camera_batch', [])):
+seen = set()
+all_sources = [(n, d) for n, d in (st.session_state.get('uploaded_batch', []) + st.session_state.get('camera_batch', [])) if not (n in seen or seen.add(n))]
 
-
-if "saved_processed_data" not in st.session_state:
-    st.session_state.saved_processed_data = []
 
 if all_sources:
     st.markdown("---")
