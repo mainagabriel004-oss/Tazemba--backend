@@ -155,7 +155,7 @@ if all_sources:
                 current_row = []
                 last_y = -1
 
-                        last_y = -1
+        last_y = -1
         current_row = []
         rows_grouped = []
 
