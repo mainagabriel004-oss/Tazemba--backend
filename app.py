@@ -104,10 +104,20 @@ with tab_camera:
             st.session_state.camera_batch = []
             st.rerun()
 
-all_sources = image_files + st.session_state.camera_batch
+    # Prevent duplicates and protect data on refresh
+    seen_names = set()
+    all_sources = []
+    for name, data in (image_files + st.session_state.camera_batch):
+        if name not in seen_names:
+            seen_names.add(name)
+            all_sources.append((name, data))
 
-processed_data = []
-parsed_extractions = {}
+    if "saved_processed_data" not in st.session_state:
+        st.session_state.saved_processed_data = []
+
+    processed_data = st.session_state.saved_processed_data
+    parsed_extractions = {}
+
 
 if all_sources:
     st.markdown("---")
