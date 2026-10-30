@@ -136,7 +136,7 @@ if all_sources:
 
             full_ocr, _ = ocr_engine(ocr_input_img)
             
-                        extracted_rows = []
+            extracted_rows = []
             stated_total_votes = "0"
             detected_candidates = {}
 
