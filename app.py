@@ -188,9 +188,6 @@ if all_sources:
                             stated_total_votes = num_matches[-1]
                         continue
 
-                    if "POLLING STATION COUNTS" in upper_text or "AGENTS OR CANDIDATES" in upper_text or "DECLARATION" in upper_text:
-                        in_candidate_section = False
-                        continue
 
                     if not in_candidate_section:
                         continue
@@ -204,8 +201,10 @@ if all_sources:
                         c_num = int(match_num.group(1))
                         c_content = match_num.group(2).strip()
                         
-                        num_matches = re.findall(r'\d+', full_row_text)
-                        vote_val = num_matches[-1] if num_matches else "0"
+                    vote_matches = re.findall(r'\b(0\d\d|\d{3})\b', full_row_text)
+                    vote_val = vote_matches[-1] if vote_matches else "0"
+
+                        
                         
                         name_part = re.sub(r'\s+\d+$', '', c_content).strip()
                         if not name_part:
