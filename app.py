@@ -15,7 +15,6 @@ if "trial_count" not in st.session_state:
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
-# Admin Sidebar Login with Explicit Submit Button
 with st.sidebar:
     st.markdown("### 🔐 System Access")
     admin_pass = st.text_input("Developer / Admin Key", type="password")
@@ -27,7 +26,6 @@ with st.sidebar:
         else:
             st.error("Invalid Developer Key")
 
-# Page Config & Branding
 st.set_page_config(
     page_title="Tazemba Form 34A Presidential Audit Engine",
     page_icon="🗳️",
@@ -37,9 +35,6 @@ st.set_page_config(
 st.title("🗳️ Tazemba Form 34A Presidential Audit Engine")
 st.markdown("### Precision Form 34A Presidential Forensic Audit & OCR Engine")
 
-# ==========================================
-# MAIN PAGE TRIAL COUNTER & GATE (Disappears if Admin)
-# ==========================================
 MAX_TRIALS = 3
 if st.session_state.is_admin:
     pass
@@ -51,7 +46,6 @@ else:
         st.error("🚨 **Free Trial Limit Reached**")
         st.markdown("You have used your 3 complimentary audits. Please contact Tazemba Enterprise Sales for full access.")
         st.stop()
-# ==========================================
 
 st.markdown("---")
 
@@ -122,63 +116,32 @@ if all_sources:
             st.session_state.last_processed_count = len(all_sources)
 
     st.markdown("---")
-    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running smart anchor-based extraction...")
+    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running full-document optical extraction...")
 
     for filename, file_bytes in all_sources:
-        nparr = np.frombuffer(file_bytes, np.uint8)
+        nparr = np.frombuffer(bytes_data if 'bytes_data' in locals() else file_bytes, np.uint8)
         img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if img_cv is not None:
             img_height, img_width = img_cv.shape[:2]
 
-            # Preprocessing
+            # Gentle preprocessing keeping text crisp
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            # Skip heavy adaptive thresholding if lighting is already good, use CLAHE directly
+            clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8,8))
             enhanced = clahe.apply(gray)
-            processed_img = cv2.adaptiveThreshold(
-                enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                cv2.THRESH_BINARY, 11, 2
-            )
-            ocr_input_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
+            ocr_input_img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
             annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            # --- STEP 1: INITIAL FULL-DOCUMENT SCAN TO FIND ANCHOR LANDMARKS ---
+            # Run OCR on the ENTIRE clean document image
             full_ocr, _ = ocr_engine(ocr_input_img)
-            
-            y_start_anchor = int(img_height * 0.15)  # Default fallback
-            y_end_anchor = int(img_height * 0.55)    # Default fallback
-
-            if full_ocr:
-                for item in full_ocr:
-                    box, text, score = item
-                    upper_t = text.upper()
-                    box_y = box[0][1]
-
-                    # Look for table header landmark
-                    if "NUMBER OF VOTES CAST" in upper_t or "CANDIDATE" in upper_t:
-                        if box_y < (img_height * 0.35):  # Must be in upper portion
-                            y_start_anchor = max(0, int(box_y - 10))
-
-                    # Look for table footer landmark
-                    if "TOTAL NUMBER OF VALID VOTES" in upper_t:
-                        if box_y > (img_height * 0.25):  # Must be below header
-                            y_end_anchor = min(img_height, int(box_y + 40))
-
-            # Ensure valid bounds
-            if y_end_anchor <= y_start_anchor:
-                y_start_anchor = int(img_height * 0.15)
-                y_end_anchor = int(img_height * 0.55)
-
-            # --- STEP 2: DYNAMIC ANCHOR-BASED CROPPING ---
-            table_roi = ocr_input_img[y_start_anchor:y_end_anchor, 0:img_width]
-            table_ocr, _ = ocr_engine(table_roi)
 
             extracted_rows = []
             stated_total_votes = "0"
             detected_candidates = {}
 
-            if table_ocr:
-                sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
+            if full_ocr:
+                sorted_ocr = sorted(full_ocr, key=lambda r: r[0][0][1])
                 rows_grouped = []
                 current_row = []
                 last_y = -1
@@ -187,7 +150,7 @@ if all_sources:
                     box, text, score = item
                     box_y = box[0][1]
 
-                    if last_y == -1 or abs(box_y - last_y) < 25:
+                    if last_y == -1 or abs(box_y - last_y) < 30:
                         current_row.append(item)
                         if last_y == -1:
                             last_y = box_y
@@ -200,13 +163,11 @@ if all_sources:
 
                 for group in rows_grouped:
                     group_sorted = sorted(group, key=lambda r: r[0][0][0])
-                    full_row_text = "N/A"
-                    if group_sorted:
-                        full_row_text = " ".join([item[1] for item in group_sorted]).strip()
-                    
+                    full_row_text = " ".join([item[1] for item in group_sorted]).strip()
                     upper_text = full_row_text.upper()
 
-                    if any(w in upper_text for w in ["PRESIDENTIAL ELECTION", "NAME OF CANDIDATE", "NO. OF VALID", "OBTAINED", "WARD", "CONSTITUENCY", "COUNTY", "CODE"]):
+                    # Skip general metadata headers
+                    if any(w in upper_text for w in ["INDEPENDENT ELECTORAL", "STATION NAME", "REGISTRATION", "POLLING STATION", "WARD", "CONSTITUENCY", "COUNTY", "CODE"]):
                         continue
 
                     if "TOTAL" in upper_text or "VALID VOTES" in upper_text:
@@ -215,7 +176,7 @@ if all_sources:
                             stated_total_votes = num_matches[-1]
                         continue
 
-                    # Dynamic match for candidate rows starting with a number (1-9)
+                    # Look for any row starting with a candidate number or containing candidate names
                     match_num = re.match(r'^([1-9])[\.\s]+(.*)', full_row_text)
                     if match_num:
                         c_num = int(match_num.group(1))
@@ -232,16 +193,24 @@ if all_sources:
                             "Votes Obtained": vote_val
                         }
 
-            # Build clean sorted candidate list dynamically from OCR detections
             if detected_candidates:
                 for c_num in sorted(detected_candidates.keys()):
                     extracted_rows.append(detected_candidates[c_num])
             else:
-                extracted_rows.append({
-                    "Candidate #": 1,
-                    "Candidate Name / Row": "Ensure form is well-lit and aligned in frame.",
-                    "Votes Obtained": "0"
-                })
+                # Fallback if strict numbering wasn't caught: grab any text lines containing candidate-like uppercase names
+                row_idx = 1
+                for group in rows_grouped:
+                    group_sorted = sorted(group, key=lambda r: r[0][0][0])
+                    row_text = " ".join([item[1] for item in group_sorted]).strip()
+                    if len(row_text) > 6 and not any(w in row_text.upper() for w in ["FORM", "COMMISSION", "RESULTS", "STATION", "WARD", "DECLARATION", "AGENT"]):
+                        num_matches = re.findall(r'\d+', row_text)
+                        vote_val = num_matches[-1] if num_matches else "0"
+                        extracted_rows.append({
+                            "Candidate #": row_idx,
+                            "Candidate Name / Row": row_text,
+                            "Votes Obtained": vote_val
+                        })
+                        row_idx += 1
 
             # Append Official Total Valid Votes Row
             extracted_rows.append({
@@ -253,7 +222,7 @@ if all_sources:
             processed_data.append({
                 "Form / File Name": filename,
                 "Parsed Rows": len(extracted_rows),
-                "Status": "🟢 SMART ANCHOR SCAN READY"
+                "Status": "🟢 FULL SCAN READY"
             })
 
             parsed_extractions[filename] = {
@@ -342,6 +311,7 @@ if all_sources:
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
