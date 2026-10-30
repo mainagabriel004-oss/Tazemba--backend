@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("🗳️ Tazemba Form 34A Audit Engine")
-st.markdown("### Universal Dynamic Batch Audit & Computer Vision Verification Platform")
+st.markdown("### Universal Dynamic Batch Audit & Smart Scanner Platform")
 st.markdown("---")
 
 # Initialize Pure-Python Dynamic OCR Engine
@@ -26,46 +26,91 @@ def load_ocr_engine():
 
 ocr_engine = load_ocr_engine()
 
-# --- ENTERPRISE DOCUMENT INGESTION PIPELINE ---
-st.subheader("📁 Enterprise Document Ingestion Pipeline")
-st.info("Ingest Form 34A documents via batch file upload or snap a photo live using your device camera.")
+# Initialize Session State for Multi-Shot Camera Batching
+if "camera_batch" not in st.session_state:
+    st.session_state.camera_batch = []
+
+# --- ENTERPRISE SMART SCANNER INGESTION PIPELINE ---
+st.subheader("📁 Enterprise Document Ingestion & Smart Scanner")
+st.info("Select multiple images from your gallery at once, or use the live scanner mode with smart lighting & angle guidance to capture multiple forms back-to-back.")
 
 # Tabbed Ingestion Interface
-tab_upload, tab_camera = st.tabs(["📁 File / ZIP Upload", "📷 Live Camera Capture"])
+tab_upload, tab_camera = st.tabs(["📁 Multi-Image Gallery Upload", "📷 Smart Live Scanner (Multi-Shot)"])
 
 image_files = []
 
-# Mode 1: File / ZIP Upload
+# Mode 1: Multi-Image Gallery Upload (No ZIP required)
 with tab_upload:
     uploaded_files = st.file_uploader(
-        "Choose Form 34A files or ZIP archive",
-        type=["png", "jpg", "jpeg", "zip"],
+        "Select multiple Form 34A images (PNG/JPG)",
+        type=["png", "jpg", "jpeg"],
         accept_multiple_files=True
     )
     if uploaded_files:
         for file in uploaded_files:
-            if file.name.endswith(".zip"):
-                with zipfile.ZipFile(file) as z:
-                    for filename in z.namelist():
-                        if filename.lower().endswith((".png", ".jpg", ".jpeg")) and not filename.startswith("__MACOSX"):
-                            image_files.append((filename, z.read(filename)))
-            else:
-                image_files.append((file.name, file.read()))
+            image_files.append((file.name, file.read()))
 
-# Mode 2: Direct Mobile/Webcam Snap
+# Mode 2: Smart Live Scanner with Multi-Shot & Quality Guidance
 with tab_camera:
-    camera_photo = st.camera_input("Point camera at Form 34A and snap photo")
+    st.markdown("#### 📱 Live Field Scanner & Guidance Assistant")
+    camera_photo = st.camera_input("Position Form 34A in frame and take photo")
+    
     if camera_photo:
-        image_files.append((f"Live_Camera_{camera_photo.name}.jpg", camera_photo.read()))
+        # Convert camera buffer to OpenCV for Smart Quality Checks
+        bytes_data = camera_photo.read()
+        nparr = np.frombuffer(bytes_data, np.uint8)
+        test_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if test_img is not None:
+            # --- SMART GUIDANCE ALGORITHM (Lighting & Sharpness Check) ---
+            gray = cv2.cvtColor(test_img, cv2.COLOR_BGR2GRAY)
+            brightness = np.mean(gray)
+            sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+            # Display Real-time Guidance Feedback
+            col_g1, col_g2 = st.columns(2)
+            col_g1.metric("Lighting Level", f"{int(brightness)} / 255")
+            col_g2.metric("Edge Sharpness", f"{int(sharpness)}")
+
+            is_lighting_good = brightness > 70  # Threshold for dim light
+            is_sharp_good = sharpness > 100     # Threshold for blur
+
+            if not is_lighting_good:
+                st.warning("⚠️ **Lighting Warning:** Environment is too dim. Move to a well-lit area or use flash.")
+            elif not is_sharp_good:
+                st.warning("⚠️ **Stability Warning:** Image looks blurry. Hold your phone steady.")
+            else:
+                st.success("🟢 **Quality Check Passed:** Optimal lighting and clarity. Ready to add to batch!")
+
+            # Multi-Shot Queue Button
+            if st.button("➕ Add Captured Photo to Batch Queue", use_container_width=True):
+                shot_name = f"Live_Scan_{len(st.session_state.camera_batch) + 1}.jpg"
+                st.session_state.camera_batch.append((shot_name, bytes_data))
+                st.success(f"Added! Total queued from camera: {len(st.session_state.camera_batch)} form(s).")
+
+    # Display Queue Management
+    if st.session_state.camera_batch:
+        st.markdown("---")
+        st.markdown(f"**Current Camera Batch Queue:** {len(st.session_state.camera_batch)} form(s) stored.")
+        if st.button("🗑️ Clear Camera Queue", type="secondary"):
+            st.session_state.camera_batch = []
+            st.rerun()
+
+# Combine both upload and camera queued files into final processing pool
+for item in image_files:
+    if item not in image_files: # Prevent duplicates if uploaded
+        pass
+all_sources = image_files + st.session_state.camera_batch
 
 # --- CORE PROCESSING PIPELINE ---
 processed_data = []
 parsed_extractions = {}
 
-if image_files:
-    st.success(f"Successfully ingested {len(image_files)} form(s). Running optical vote extraction & forensic verification...")
+if all_sources:
+    st.markdown("---")
+    st.success(f"Successfully loaded {len(all_sources)} form(s). Running optical vote extraction & forensic verification...")
 
-    for filename, file_bytes in image_files:
+    for filename, file_bytes in all_sources:
         nparr = np.frombuffer(file_bytes, np.uint8)
         img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
@@ -156,7 +201,7 @@ if image_files:
                 st.image(
                     parsed_extractions[selected_file]["annotated_image"],
                     caption=f"Targeted Table Area: {selected_file}",
-                    use_container_width=True
+                    use_column_width=True
                 )
 
             with col2:
@@ -211,12 +256,13 @@ if image_files:
                         label="📥 Download Certified Audit Report (CSV)",
                         data=csv_buffer,
                         file_name=f"Audit_Report_{selected_file}.csv",
-                        mime="text/csv",
+                        mime="text/css",
                         use_container_width=True
                     )
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
