@@ -135,30 +135,24 @@ if all_sources:
                 enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                 cv2.THRESH_BINARY, 11, 2
             )
-            # Pass clean grayscale/threshold view to OCR engine for maximum accuracy
             ocr_input_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
             # -----------------------------------------------------------------
 
-            # Focused ROI specifically targeting the active candidate rows
-            y_start = int(img_height * 0.20)
-            y_end = int(img_height * 0.45)
+            # Focused ROI targeting candidate rows area
+            y_start = int(img_height * 0.15)
+            y_end = int(img_height * 0.60)
             
             table_roi = ocr_input_img[y_start:y_end, 0:img_width]
-            
-            # NO BOUNDING BOX DRAWN: Clean display image passed directly
             annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            # Run OCR on the isolated candidate section
+            # Run OCR on the isolated section
             table_ocr, _ = ocr_engine(table_roi)
 
             extracted_rows = []
-            detected_candidates = {}
             stated_total_votes = "0"
 
             if table_ocr:
-                # Group text fragments vertically by Y-coordinate lines
                 sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
-                
                 rows_grouped = []
                 current_row = []
                 last_y = -1
@@ -167,7 +161,7 @@ if all_sources:
                     box, text, score = item
                     box_y = box[0][1]
 
-                    if last_y == -1 or abs(box_y - last_y) < 22:
+                    if last_y == -1 or abs(box_y - last_y) < 25:
                         current_row.append(item)
                         if last_y == -1:
                             last_y = box_y
@@ -178,13 +172,14 @@ if all_sources:
                 if current_row:
                     rows_grouped.append(current_row)
 
+                row_counter = 1
                 for group in rows_grouped:
                     group_sorted = sorted(group, key=lambda r: r[0][0][0])
                     full_row_text = " ".join([item[1] for item in group_sorted]).strip()
                     upper_text = full_row_text.upper()
 
-                    # Skip headers and metadata
-                    if any(w in upper_text for w in ["NAME OF CANDIDATE", "NO. OF VALID", "OBTAINED", "WARD", "CONSTITUENCY", "COUNTY"]):
+                    # Skip general metadata headers
+                    if any(w in upper_text for w in ["STATION NAME", "REGISTRATION", "POLLING", "WARD", "CONSTITUENCY", "COUNTY", "CODE"]):
                         continue
 
                     # Check for Total Valid Votes row
@@ -194,47 +189,25 @@ if all_sources:
                             stated_total_votes = num_matches[-1]
                         continue
 
-                    # Check for Candidate numbered rows (1, 2, 3, 4, etc.)
-                    match_num_prefix = re.match(r'^([1-9])[\.\s]+(.*)', full_row_text)
-                    if match_num_prefix:
-                        cand_num = int(match_num_prefix.group(1))
-                        cand_content = match_num_prefix.group(2).strip()
+                    # Dynamically capture text lines containing potential names/votes
+                    if len(full_row_text) > 3:
+                        num_matches = re.findall(r'\d+', full_row_text)
+                        vote_val = num_matches[-1] if num_matches else "0"
                         
-                        # Extract vote number if present at the end of the line
-                        num_matches = re.findall(r'\d+', cand_content)
-                        vote_val = "0"
-                        if num_matches:
-                            vote_val = num_matches[-1]
-                            name_part = re.sub(r'\s+' + vote_val + r'$', '', cand_content).strip()
-                        else:
-                            name_part = cand_content
+                        extracted_rows.append({
+                            "Candidate #": row_counter,
+                            "Candidate Name / Row": full_row_text,
+                            "Votes Obtained": vote_val if vote_val != full_row_text else "0"
+                        })
+                        row_counter += 1
 
-                        detected_candidates[cand_num] = {
-                            "Candidate #": cand_num,
-                            "Candidate Name / Row": f"{cand_num}. {name_part}",
-                            "Votes Obtained": vote_val
-                        }
-
-            # Build clean sorted candidate list
-            for c_num in sorted(detected_candidates.keys()):
-                extracted_rows.append(detected_candidates[c_num])
-
-            # Fallback if OCR missed specific text fields on this exact sample form
+            # Fully dynamic catch-all if strict rows weren't isolated neatly
             if not extracted_rows:
-                extracted_rows = [
-                    {"Candidate #": 1, "Candidate Name / Row": "1. ODINGA RAILA", "Votes Obtained": "179"},
-                    {"Candidate #": 2, "Candidate Name / Row": "2. RUTO WILLIAM SAMOEI", "Votes Obtained": "291"},
-                    {"Candidate #": 3, "Candidate Name / Row": "3. WAHIGA DAVID MWAURE", "Votes Obtained": "0"},
-                    {"Candidate #": 4, "Candidate Name / Row": "4. WAJACKOYAH GEORGE LUCHIRI", "Votes Obtained": "0"}
-                ]
-                stated_total_votes = "291"
-
-            # Always append the official Total Valid Votes row at the bottom
-            extracted_rows.append({
-                "Candidate #": len(extracted_rows) + 1,
-                "Candidate Name / Row": "Total number of valid votes cast",
-                "Votes Obtained": stated_total_votes if stated_total_votes != "0" else "291"
-            })
+                extracted_rows.append({
+                    "Candidate #": 1,
+                    "Candidate Name / Row": "No structured text rows detected. Please edit or check image lighting.",
+                    "Votes Obtained": "0"
+                })
 
             processed_data.append({
                 "Form / File Name": filename,
@@ -329,6 +302,7 @@ if all_sources:
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
