@@ -161,49 +161,49 @@ if all_sources:
                 if current_row:
                     rows_grouped.append(current_row)
 
-                for group in rows_grouped:
-                    group_sorted = sorted(group, key=lambda r: r[0][0][0])
-                    full_row_text = " ".join([item[1] for item in group_sorted]).strip()
-                    upper_text = full_row_text.upper()
+    in_candidate_section = True
+    for group in rows_grouped:
+        group_sorted = sorted(group, key=lambda b: b[0][0])
+        full_row_text = " ".join([item[1] for item in group_sorted])
+        upper_text = full_row_text.upper()
 
-                    # SEMANTIC GUARD: Ignore agent table, declarations, and metadata headers
-                    skip_keywords = [
-                        "PASSPORT", "PARTY", "TEL", "SIGNATURE", "AGENT", 
-                        "DECLARATION", "POLLING STATION COUNTS", "COMMISSION",
-                        "ELECTORAL", "BOUNDARIES", "REASONS FOR REFUSAL"
-                    ]
-                    if any(kw in upper_text for kw in skip_keywords):
-                        continue
+        # Stop parsing candidates once we hit total votes or declaration/agent sections
+        if any(term in upper_text for term in ["TOTAL NUMBER OF VALID VOTES", "DECLARATION", "AGENTS OR CANDIDATES"]):
+            in_candidate_section = False
 
-                    # Capture stated total valid votes
-                    if "TOTAL NUMBER OF VALID VOTES" in upper_text:
-                        match_num = re.match(r'^([1-8])[\.\s]*([A-Z].*)', full_row_text, re.IGNORECASE)
+        # Capture stated total valid votes
+        if "TOTAL NUMBER OF VALID VOTES" in upper_text:
+            num_matches = re.findall(r'\d+', full_row_text)
+            if num_matches:
+                stated_total_votes = num_matches[-1]
+            continue
 
-                        if num_matches:
-                            stated_total_votes = num_matches[-1]
-                        continue
+        # Skip if we are past the candidate section or hit skip keywords
+        if not in_candidate_section:
+            continue
 
-                                        # Match presidential candidate rows starting with 1 to 8 anywhere in the line text
-                    match_num = re.search(r'\b([1-8])[\.\s]+([A-Z].*)', full_row_text)
-                    if match_num:
-                        c_num = int(match_num.group(1))
-                        c_content = match_num.group(2).strip()
-                        
-                        num_matches = re.findall(r'\d+', full_row_text)
-                        vote_val = num_matches[-1] if num_matches else "0"
-                        
-                        # Clean up the name part by stripping trailing votes if captured
-                        name_part = re.sub(r'\s+\d+$', '', c_content).strip()
-                        if not name_part:
-                            name_part = c_content
+        if any(kw in upper_text for kw in skip_keywords):
+            continue
 
-                        if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
-                            detected_candidates[c_num] = {
-                                "Candidate #": c_num,
-                                "Candidate Name / Row": f"{c_num}. {name_part}",
-                                "Votes Obtained": vote_val
-                            }
+        # Match presidential candidate rows strictly in the upper section
+        match_num = re.search(r'\b([1-8])[\.\s]+([A-Z].*)', full_row_text)
+        if match_num:
+            c_num = int(match_num.group(1))
+            c_content = match_num.group(2).strip()
+            
+            num_matches = re.findall(r'\d+', full_row_text)
+            vote_val = num_matches[-1] if num_matches else "0"
+            
+            name_part = re.sub(r'\s+\d+$', '', c_content).strip()
+            if not name_part:
+                name_part = c_content
 
+            if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+                detected_candidates[c_num] = {
+                    "Candidate #": c_num,
+                    "Candidate Name / Row": f"{c_num}. {name_part}",
+                    "Votes Obtained": vote_val
+                }
 
             if detected_candidates:
                 for c_num in sorted(detected_candidates.keys()):
