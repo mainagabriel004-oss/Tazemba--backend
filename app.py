@@ -7,7 +7,7 @@ import re
 from rapidocr_onnxruntime import RapidOCR
 
 # ==========================================
-# TRIAL & ADMIN BYPASS CODE
+# TRIAL & ADMIN BYPASS SETUP
 # ==========================================
 if "trial_count" not in st.session_state:
     st.session_state.trial_count = 0
@@ -19,29 +19,37 @@ if "is_admin" not in st.session_state:
 with st.sidebar:
     st.markdown("### 🔐 System Access")
     admin_pass = st.text_input("Developer / Admin Key", type="password")
-    if admin_pass == "tazemba2026": 
+    if admin_pass == "MainaTazembaLegend4": 
         st.session_state.is_admin = True
         st.success("Admin Mode Active")
-
-MAX_TRIALS = 3
-if not st.session_state.is_admin:
-    if st.session_state.trial_count >= MAX_TRIALS:
-        st.error("🚨 Free Trial Limit Reached")
-        st.markdown("You have used your 3 complimentary audits. Please contact Tazemba Enterprise Sales for full access.")
-        st.stop()
-    else:
-        st.sidebar.info(f"Free Trials Remaining: {MAX_TRIALS - st.session_state.trial_count}")
 # ==========================================
 
 # Page Config & Branding
 st.set_page_config(
-    page_title="Tazemba Form 34A Audit Engine",
+    page_title="Tazemba Form 34A Presidential Audit Engine",
     page_icon="🗳️",
     layout="wide"
 )
 
-st.title("🗳️ Tazemba Form 34A Audit Engine")
-st.markdown("### Precision Form 34A Forensic Audit & OCR Engine")
+st.title("🗳️ Tazemba Form 34A Presidential Audit Engine")
+st.markdown("### Precision Form 34A Presidential Forensic Audit & OCR Engine")
+
+# ==========================================
+# MAIN PAGE TRIAL COUNTER & GATE
+# ==========================================
+MAX_TRIALS = 3
+if st.session_state.is_admin:
+    st.info("🔓 **Admin Mode Active:** Unlimited trials enabled.")
+else:
+    remaining = MAX_TRIALS - st.session_state.trial_count
+    if remaining > 0:
+        st.warning(f"⏳ **Free Trial Active:** You have **{remaining}** of {MAX_TRIALS} complimentary Form 34A audits remaining.")
+    else:
+        st.error("🚨 **Free Trial Limit Reached**")
+        st.markdown("You have used your 3 complimentary audits. Please contact Tazemba Enterprise Sales for full access.")
+        st.stop()
+# ==========================================
+
 st.markdown("---")
 
 # Initialize Pure-Python Dynamic OCR Engine
@@ -56,8 +64,8 @@ if "camera_batch" not in st.session_state:
     st.session_state.camera_batch = []
 
 # --- ENTERPRISE SMART SCANNER INGESTION PIPELINE ---
-st.subheader("📁 Enterprise Document Ingestion & Smart Scanner")
-st.info("Select multiple images from your gallery at once, or use the live scanner mode with smart lighting & angle guidance.")
+st.subheader("📁 Form 34A Document Ingestion & Smart Scanner")
+st.info("Upload Form 34A presidential images from your gallery or use live scanner mode.")
 
 tab_upload, tab_camera = st.tabs(["📁 Multi-Image Gallery Upload", "📷 Smart Live Scanner (Multi-Shot)"])
 
@@ -99,7 +107,7 @@ with tab_camera:
                 st.warning("⚠️ **Warning:** Adjust lighting or hold device steady for better OCR extraction.")
 
             if st.button("➕ Add Captured Photo to Batch Queue", use_container_width=True):
-                shot_name = f"Live_Scan_{len(st.session_state.camera_batch) + 1}.jpg"
+                shot_name = f"Form_34A_Scan_{len(st.session_state.camera_batch) + 1}.jpg"
                 st.session_state.camera_batch.append((shot_name, bytes_data))
                 st.success(f"Added! Total queued: {len(st.session_state.camera_batch)}")
 
@@ -112,13 +120,13 @@ with tab_camera:
 
 all_sources = image_files + st.session_state.camera_batch
 
-# --- CORE CLEAN PRECISION EXTRACTION PIPELINE ---
+# --- CORE 100% DYNAMIC EXTRACTION PIPELINE ---
 processed_data = []
 parsed_extractions = {}
 
 if all_sources:
     st.markdown("---")
-    st.success(f"Successfully loaded {len(all_sources)} form(s). Running clean optical extraction...")
+    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running 100% dynamic optical extraction...")
 
     for filename, file_bytes in all_sources:
         nparr = np.frombuffer(file_bytes, np.uint8)
@@ -127,7 +135,7 @@ if all_sources:
         if img_cv is not None:
             img_height, img_width = img_cv.shape[:2]
 
-            # --- ADVANCED MOBILE IMAGE PREPROCESSING (Shadow & Contrast Fix) ---
+            # --- ADVANCED MOBILE IMAGE PREPROCESSING ---
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
             enhanced = clahe.apply(gray)
@@ -136,23 +144,19 @@ if all_sources:
                 cv2.THRESH_BINARY, 11, 2
             )
             ocr_input_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
-            # -----------------------------------------------------------------
+            # ---------------------------------------------
 
-            # Focused ROI targeting candidate rows area
-            y_start = int(img_height * 0.15)
-            y_end = int(img_height * 0.60)
-            
-            table_roi = ocr_input_img[y_start:y_end, 0:img_width]
             annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            # Run OCR on the isolated section
-            table_ocr, _ = ocr_engine(table_roi)
+            # Run OCR across the full document dynamically
+            full_ocr, _ = ocr_engine(ocr_input_img)
 
             extracted_rows = []
             stated_total_votes = "0"
 
-            if table_ocr:
-                sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
+            if full_ocr:
+                sorted_ocr = sorted(full_ocr, key=lambda r: r[0][0][1])
+                
                 rows_grouped = []
                 current_row = []
                 last_y = -1
@@ -178,41 +182,51 @@ if all_sources:
                     full_row_text = " ".join([item[1] for item in group_sorted]).strip()
                     upper_text = full_row_text.upper()
 
-                    # Skip general metadata headers
-                    if any(w in upper_text for w in ["STATION NAME", "REGISTRATION", "POLLING", "WARD", "CONSTITUENCY", "COUNTY", "CODE"]):
+                    # Skip general metadata headers and non-candidate labels
+                    if any(w in upper_text for w in ["INDEPENDENT ELECTORAL", "PRESIDENTIAL ELECTION RESULTS", "STATION NAME", "REGISTRATION", "POLLING STATION", "WARD", "CONSTITUENCY", "COUNTY", "CODE", "NAME OF CANDIDATE", "NO. OF VALID"]):
                         continue
 
-                    # Check for Total Valid Votes row
+                    # Capture stated total votes dynamically
                     if "TOTAL" in upper_text or "VALID VOTES" in upper_text:
                         num_matches = re.findall(r'\d+', full_row_text)
                         if num_matches:
                             stated_total_votes = num_matches[-1]
                         continue
 
-                    # Dynamically capture text lines containing potential names/votes
+                    # Dynamically capture row content and associated vote tally
                     if len(full_row_text) > 3:
                         num_matches = re.findall(r'\d+', full_row_text)
                         vote_val = num_matches[-1] if num_matches else "0"
                         
+                        name_part = re.sub(r'\s+' + vote_val + r'$', '', full_row_text).strip()
+                        if not name_part:
+                            name_part = full_row_text
+
                         extracted_rows.append({
                             "Candidate #": row_counter,
-                            "Candidate Name / Row": full_row_text,
+                            "Candidate Name / Row": name_part,
                             "Votes Obtained": vote_val if vote_val != full_row_text else "0"
                         })
                         row_counter += 1
 
-            # Fully dynamic catch-all if strict rows weren't isolated neatly
             if not extracted_rows:
                 extracted_rows.append({
                     "Candidate #": 1,
-                    "Candidate Name / Row": "No structured text rows detected. Please edit or check image lighting.",
+                    "Candidate Name / Row": "No text lines detected. Please check form lighting or alignment.",
                     "Votes Obtained": "0"
+                })
+            else:
+                # Append Official Total Valid Votes Row at the bottom
+                extracted_rows.append({
+                    "Candidate #": len(extracted_rows) + 1,
+                    "Candidate Name / Row": "Total number of valid votes cast",
+                    "Votes Obtained": stated_total_votes
                 })
 
             processed_data.append({
                 "Form / File Name": filename,
                 "Parsed Rows": len(extracted_rows),
-                "Status": "🟢 READY FOR REVIEW"
+                "Status": "🟢 DYNAMIC SCAN READY"
             })
 
             parsed_extractions[filename] = {
@@ -222,14 +236,14 @@ if all_sources:
 
     # Global Batch Dashboard View
     if processed_data:
-        st.markdown("### 📊 Global Batch Audit Overview")
+        st.markdown("### 📊 Global Form 34A Batch Overview")
         st.dataframe(pd.DataFrame(processed_data), use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 🔍 Individual Form Deep-Dive & Forensic Reconciliation Engine")
+        st.markdown("### 🔍 Form 34A Forensic Reconciliation & Audit Engine")
         
         selected_file = st.selectbox(
-            "Select a processed form to inspect:",
+            "Select a Form 34A to inspect:",
             options=list(parsed_extractions.keys())
         )
 
@@ -237,10 +251,10 @@ if all_sources:
             col1, col2 = st.columns([1, 1])
 
             with col1:
-                st.subheader("Source Form Preview")
+                st.subheader("Source Form 34A Preview")
                 st.image(
                     parsed_extractions[selected_file]["annotated_image"],
-                    caption=f"Source Document: {selected_file}",
+                    caption=f"Document: {selected_file}",
                     use_column_width=True
                 )
 
@@ -262,7 +276,7 @@ if all_sources:
                         vote_val_str = re.sub(r'\D', '', str(row["Votes Obtained"]))
                         vote_val = int(vote_val_str) if vote_val_str else 0
 
-                        if "TOTAL" in row_text or "VALID VOTES CAST" in row_text:
+                        if "TOTAL" in row_text or "VALID VOTES" in row_text:
                             stated_total = vote_val
                         else:
                             candidate_sum += vote_val
@@ -277,12 +291,12 @@ if all_sources:
                         st.success("✅ **AUDIT STATUS: PASSED** — Candidate vote tallies perfectly match the stated total valid votes cast.")
                         audit_status_text = "PASSED (🟢)"
                     else:
-                        st.error(f"🚨 **AUDIT ALERT: MATH DISCREPANCY DETECTED!** Calculated sum ({candidate_sum}) does not match stated form total ({stated_total}). Please verify handwriting or data entries.")
+                        st.error(f"🚨 **AUDIT ALERT: MATH DISCREPANCY DETECTED!** Calculated sum ({candidate_sum}) does not match stated form total ({stated_total}).")
                         audit_status_text = "DISCREPANCY DETECTED (🔴)"
 
                     # --- CERTIFIED REPORT EXPORT ---
                     st.markdown("---")
-                    st.markdown("#### 📄 Official Audit Certificate & Data Export")
+                    st.markdown("#### 📄 Official Form 34A Audit Certificate & Export")
                     
                     csv_data = edited_df.copy()
                     csv_data["Audit File Name"] = selected_file
@@ -293,15 +307,16 @@ if all_sources:
                     csv_buffer = csv_data.to_csv(index=False).encode('utf-8')
 
                     st.download_button(
-                        label="📥 Download Certified Audit Report (CSV)",
+                        label="📥 Download Certified Form 34A Audit Report (CSV)",
                         data=csv_buffer,
-                        file_name=f"Audit_Report_{selected_file}.csv",
+                        file_name=f"Form34A_Audit_{selected_file}.csv",
                         mime="text/css",
                         use_container_width=True
                     )
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
