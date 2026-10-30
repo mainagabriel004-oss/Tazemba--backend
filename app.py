@@ -42,7 +42,6 @@ st.markdown("### Precision Form 34A Presidential Forensic Audit & OCR Engine")
 # ==========================================
 MAX_TRIALS = 3
 if st.session_state.is_admin:
-    # Admin mode: Trial banner completely hidden as requested!
     pass
 else:
     remaining = MAX_TRIALS - st.session_state.trial_count
@@ -117,14 +116,13 @@ processed_data = []
 parsed_extractions = {}
 
 if all_sources:
-    # Increment trial count for non-admin users upon running an extraction
     if not st.session_state.is_admin:
         if "last_processed_count" not in st.session_state or st.session_state.last_processed_count != len(all_sources):
             st.session_state.trial_count += 1
             st.session_state.last_processed_count = len(all_sources)
 
     st.markdown("---")
-    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running precision candidate table extraction...")
+    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running smart anchor-based extraction...")
 
     for filename, file_bytes in all_sources:
         nparr = np.frombuffer(file_bytes, np.uint8)
@@ -144,11 +142,35 @@ if all_sources:
             ocr_input_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
             annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            # --- TARGETED ROI: Strictly isolate candidate box area (middle vertical slice) ---
-            y_start = int(img_height * 0.20)
-            y_end = int(img_height * 0.45)
-            table_roi = ocr_input_img[y_start:y_end, 0:img_width]
+            # --- STEP 1: INITIAL FULL-DOCUMENT SCAN TO FIND ANCHOR LANDMARKS ---
+            full_ocr, _ = ocr_engine(ocr_input_img)
+            
+            y_start_anchor = int(img_height * 0.15)  # Default fallback
+            y_end_anchor = int(img_height * 0.55)    # Default fallback
 
+            if full_ocr:
+                for item in full_ocr:
+                    box, text, score = item
+                    upper_t = text.upper()
+                    box_y = box[0][1]
+
+                    # Look for table header landmark
+                    if "NUMBER OF VOTES CAST" in upper_t or "CANDIDATE" in upper_t:
+                        if box_y < (img_height * 0.35):  # Must be in upper portion
+                            y_start_anchor = max(0, int(box_y - 10))
+
+                    # Look for table footer landmark
+                    if "TOTAL NUMBER OF VALID VOTES" in upper_t:
+                        if box_y > (img_height * 0.25):  # Must be below header
+                            y_end_anchor = min(img_height, int(box_y + 40))
+
+            # Ensure valid bounds
+            if y_end_anchor <= y_start_anchor:
+                y_start_anchor = int(img_height * 0.15)
+                y_end_anchor = int(img_height * 0.55)
+
+            # --- STEP 2: DYNAMIC ANCHOR-BASED CROPPING ---
+            table_roi = ocr_input_img[y_start_anchor:y_end_anchor, 0:img_width]
             table_ocr, _ = ocr_engine(table_roi)
 
             extracted_rows = []
@@ -165,7 +187,7 @@ if all_sources:
                     box, text, score = item
                     box_y = box[0][1]
 
-                    if last_y == -1 or abs(box_y - last_y) < 22:
+                    if last_y == -1 or abs(box_y - last_y) < 25:
                         current_row.append(item)
                         if last_y == -1:
                             last_y = box_y
@@ -176,13 +198,15 @@ if all_sources:
                 if current_row:
                     rows_grouped.append(current_row)
 
-                row_counter = 1
                 for group in rows_grouped:
                     group_sorted = sorted(group, key=lambda r: r[0][0][0])
-                    full_row_text = " ".join([item[1] for item in group_sorted]).strip()
+                    full_row_text = "N/A"
+                    if group_sorted:
+                        full_row_text = " ".join([item[1] for item in group_sorted]).strip()
+                    
                     upper_text = full_row_text.upper()
 
-                    if any(w in upper_text for w in ["NAME OF CANDIDATE", "NO. OF VALID", "OBTAINED", "WARD", "CONSTITUENCY"]):
+                    if any(w in upper_text for w in ["PRESIDENTIAL ELECTION", "NAME OF CANDIDATE", "NO. OF VALID", "OBTAINED", "WARD", "CONSTITUENCY", "COUNTY", "CODE"]):
                         continue
 
                     if "TOTAL" in upper_text or "VALID VOTES" in upper_text:
@@ -191,8 +215,8 @@ if all_sources:
                             stated_total_votes = num_matches[-1]
                         continue
 
-                    # Match numbered candidate rows explicitly
-                    match_num = re.match(r'^([1-8])[\.\s]+(.*)', full_row_text)
+                    # Dynamic match for candidate rows starting with a number (1-9)
+                    match_num = re.match(r'^([1-9])[\.\s]+(.*)', full_row_text)
                     if match_num:
                         c_num = int(match_num.group(1))
                         c_content = match_num.group(2).strip()
@@ -207,7 +231,6 @@ if all_sources:
                             "Candidate Name / Row": f"{c_num}. {name_part}",
                             "Votes Obtained": vote_val
                         }
-                        row_counter += 1
 
             # Build clean sorted candidate list dynamically from OCR detections
             if detected_candidates:
@@ -230,7 +253,7 @@ if all_sources:
             processed_data.append({
                 "Form / File Name": filename,
                 "Parsed Rows": len(extracted_rows),
-                "Status": "🟢 PRECISION SCAN READY"
+                "Status": "🟢 SMART ANCHOR SCAN READY"
             })
 
             parsed_extractions[filename] = {
@@ -319,6 +342,7 @@ if all_sources:
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
