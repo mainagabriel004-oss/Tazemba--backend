@@ -183,24 +183,27 @@ if all_sources:
                             stated_total_votes = num_matches[-1]
                         continue
 
-                    # Match presidential candidate rows strictly numbered 1 through 8
-                    match_num = re.match(r'^([1-8])[\.\s]+(.*)', full_row_text)
+                                        # Match presidential candidate rows starting with 1 to 8 anywhere in the line text
+                    match_num = re.search(r'\b([1-8])[\.\s]+([A-Z].*)', full_row_text)
                     if match_num:
                         c_num = int(match_num.group(1))
                         c_content = match_num.group(2).strip()
                         
-                        num_matches = re.findall(r'\d+', c_content)
+                        num_matches = re.findall(r'\d+', full_row_text)
                         vote_val = num_matches[-1] if num_matches else "0"
-                        name_part = re.sub(r'\s+' + vote_val + r'$', '', c_content).strip()
+                        
+                        # Clean up the name part by stripping trailing votes if captured
+                        name_part = re.sub(r'\s+\d+$', '', c_content).strip()
                         if not name_part:
                             name_part = c_content
 
-                        if len(name_part) > 2 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+                        if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
                             detected_candidates[c_num] = {
                                 "Candidate #": c_num,
                                 "Candidate Name / Row": f"{c_num}. {name_part}",
                                 "Votes Obtained": vote_val
                             }
+
 
             if detected_candidates:
                 for c_num in sorted(detected_candidates.keys()):
