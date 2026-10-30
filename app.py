@@ -205,10 +205,9 @@ if all_sources:
                     vote_val = vote_matches[-1] if vote_matches else "0"
 
                         
-                        
-                         name_part = re.sub(r'\s+\d+$', '', c_content).strip()
-                        if not name_part:
-                            name_part = c_content
+                    name_part = re.sub(r'\s+\d+$', '', c_content).strip()
+                    if not name_part:
+                        name_part = c_content
 
                         if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
                             detected_candidates[c_num] = {
