@@ -104,20 +104,16 @@ with tab_camera:
             st.session_state.camera_batch = []
             st.rerun()
 
-    # Prevent duplicates and protect data on refresh
-    seen_names = set()
-    all_sources = []
-    for name, data in (image_files + st.session_state.camera_batch):
-        if name not in seen_names:
-            seen_names.add(name)
-            all_sources.append((name, data))
+# Prevent duplicates and protect data on refresh
+seen_names = set()
+all_sources = []
+for name, data in (image_files + st.session_state.camera_batch):
+    if name not in seen_names:
+        seen_names.add(name)
+        all_sources.append((name, data))
 
-    if "saved_processed_data" not in st.session_state:
-        st.session_state.saved_processed_data = []
-
-    processed_data = st.session_state.saved_processed_data
-    parsed_extractions = {}
-
+if "saved_processed_data" not in st.session_state:
+    st.session_state.saved_processed_data = []
 
 if all_sources:
     st.markdown("---")
@@ -129,6 +125,9 @@ if all_sources:
         if not st.session_state.is_admin:
             st.session_state.trial_count += 1
         st.rerun()
+
+    processed_data = []
+    parsed_extractions = {}
 
     # Process files once loaded
     for filename, file_bytes in all_sources:
@@ -168,51 +167,51 @@ if all_sources:
                         rows_grouped.append(current_row)
                         current_row = [item]
                         last_y = box_y
-    skip_keywords = [
-        "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE", 
-        "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR CANDIDATES",
-        "ELECTORAL", "BOUNDARIES", "REASONS FOR"
-    ]
-    in_candidate_section = True
-    for group in rows_grouped:
- 
+                if current_row:
+                    rows_grouped.append(current_row)
 
-        group_sorted = sorted(group, key=lambda b: b[0][0])
-        full_row_text = " ".join([item[1] for item in group_sorted])
-        upper_text = full_row_text.upper()
+                skip_keywords = [
+                    "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE", 
+                    "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR CANDIDATES",
+                    "ELECTORAL", "BOUNDARIES", "REASONS FOR"
+                ]
+                in_candidate_section = True
 
-        if "TOTAL NUMBER OF VALID VOTES" in upper_text:
-            num_matches = re.findall(r'\d+', full_row_text)
-            if num_matches:
-                stated_total_votes = num_matches[-1]
-            continue
+                for group in rows_grouped:
+                    group_sorted = sorted(group, key=lambda b: b[0][0])
+                    full_row_text = " ".join([item[1] for item in group_sorted])
+                    upper_text = full_row_text.upper()
 
-        # Skip if we are past the candidate section or hit skip keywords
-        if not in_candidate_section:
-            continue
+                    if "TOTAL NUMBER OF VALID VOTES" in upper_text:
+                        num_matches = re.findall(r'\d+', full_row_text)
+                        if num_matches:
+                            stated_total_votes = num_matches[-1]
+                        continue
 
-        if any(kw in upper_text for kw in skip_keywords):
-            continue
+                    if not in_candidate_section:
+                        continue
 
-        # Match presidential candidate rows strictly in the upper section
-        match_num = re.search(r'\b([1-8])[\.\s]+([A-Z].*)', full_row_text)
-        if match_num:
-            c_num = int(match_num.group(1))
-            c_content = match_num.group(2).strip()
-            
-            num_matches = re.findall(r'\d+', full_row_text)
-            vote_val = num_matches[-1] if num_matches else "0"
-            
-            name_part = re.sub(r'\s+\d+$', '', c_content).strip()
-            if not name_part:
-                name_part = c_content
+                    if any(kw in upper_text for kw in skip_keywords):
+                        continue
 
-            if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
-                detected_candidates[c_num] = {
-                    "Candidate #": c_num,
-                    "Candidate Name / Row": f"{c_num}. {name_part}",
-                    "Votes Obtained": vote_val
-                }
+                    match_num = re.search(r'\b([1-8])[\.\s]+([A-Z].*)', full_row_text)
+                    if match_num:
+                        c_num = int(match_num.group(1))
+                        c_content = match_num.group(2).strip()
+                        
+                        num_matches = re.findall(r'\d+', full_row_text)
+                        vote_val = num_matches[-1] if num_matches else "0"
+                        
+                        name_part = re.sub(r'\s+\d+$', '', c_content).strip()
+                        if not name_part:
+                            name_part = c_content
+
+                        if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+                            detected_candidates[c_num] = {
+                                "Candidate #": c_num,
+                                "Candidate Name / Row": f"{c_num}. {name_part}",
+                                "Votes Obtained": vote_val
+                            }
 
             if detected_candidates:
                 for c_num in sorted(detected_candidates.keys()):
@@ -231,8 +230,6 @@ if all_sources:
                 "Votes Obtained": stated_total_votes if stated_total_votes != "0" else "17"
             })
 
-                    
-
             processed_data.append({
                 "Form / File Name": filename,
                 "Parsed Rows": len(extracted_rows),
@@ -244,10 +241,14 @@ if all_sources:
                 "annotated_image": annotated_img_rgb
             }
 
-    if processed_data:
-        st.markdown("### 📊 Global Form 34A Batch Overview")
-        st.dataframe(pd.DataFrame(processed_data), use_container_width=True)
+    # Save to session state for refresh resilience
+    st.session_state.saved_processed_data = processed_data
 
+if st.session_state.saved_processed_data:
+    st.markdown("### 📊 Global Form 34A Batch Overview")
+    st.dataframe(pd.DataFrame(st.session_state.saved_processed_data), use_container_width=True)
+
+    if parsed_extractions:
         st.markdown("---")
         st.markdown("### 🔍 Form 34A Forensic Reconciliation & Audit Engine")
         
