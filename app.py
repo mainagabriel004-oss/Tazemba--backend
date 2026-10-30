@@ -206,7 +206,7 @@ if all_sources:
 
                         
                         
-                        name_part = re.sub(r'\s+\d+$', '', c_content).strip()
+                         name_part = re.sub(r'\s+\d+$', '', c_content).strip()
                         if not name_part:
                             name_part = c_content
 
