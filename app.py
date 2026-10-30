@@ -104,7 +104,7 @@ with tab_camera:
 # Prevent duplicates and protect data on refresh
 seen_names = set()
 all_sources = []
-for name, data in (image_files + st.session_state.camera_batch):
+for name, data in (st.session_state.uploaded_batch + st.session_state.camera_batch):
     if name not in seen_names:
         seen_names.add(name)
         all_sources.append((name, data))
