@@ -116,32 +116,59 @@ if all_sources:
             st.session_state.last_processed_count = len(all_sources)
 
     st.markdown("---")
-    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running full-document optical extraction...")
+    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running strict candidate table extraction...")
 
     for filename, file_bytes in all_sources:
-        nparr = np.frombuffer(bytes_data if 'bytes_data' in locals() else file_bytes, np.uint8)
+        nparr = np.frombuffer(file_bytes, np.uint8)
         img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if img_cv is not None:
             img_height, img_width = img_cv.shape[:2]
 
-            # Gentle preprocessing keeping text crisp
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            # Skip heavy adaptive thresholding if lighting is already good, use CLAHE directly
-            clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8,8))
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
             enhanced = clahe.apply(gray)
             ocr_input_img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
             annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            # Run OCR on the ENTIRE clean document image
+            # Step 1: Scan full doc to locate the exact top header and bottom total lines as strict landmarks
             full_ocr, _ = ocr_engine(ocr_input_img)
-
-            extracted_rows = []
+            
+            top_y = int(img_height * 0.18)   # Safe default fallback
+            bottom_y = int(img_height * 0.42) # Safe default fallback
             stated_total_votes = "0"
-            detected_candidates = {}
 
             if full_ocr:
-                sorted_ocr = sorted(full_ocr, key=lambda r: r[0][0][1])
+                for item in full_ocr:
+                    box, text, score = item
+                    upper_t = text.upper()
+                    box_y = box[0][1]
+
+                    if "NUMBER OF VOTES CAST IN FAVOUR" in upper_t or "NAME OF CANDIDATE" in upper_t:
+                        if box_y < (img_height * 0.3):
+                            top_y = int(box_y + 25) # Start right below title header
+
+                    if "TOTAL NUMBER OF VALID VOTES CAST" in upper_t:
+                        if box_y > (img_height * 0.2):
+                            bottom_y = int(box_y + 15)
+                            num_matches = re.findall(r'\d+', text)
+                            if num_matches:
+                                stated_total_votes = num_matches[-1]
+
+            # Ensure proper crop box isolating ONLY the candidate rows
+            if bottom_y <= top_y:
+                top_y = int(img_height * 0.18)
+                bottom_y = int(img_height * 0.42)
+
+            # Step 2: Crop precisely to the candidate block
+            table_roi = ocr_input_img[top_y:bottom_y, int(img_width * 0.05):int(img_width * 0.95)]
+            table_ocr, _ = ocr_engine(table_roi)
+
+            extracted_rows = []
+            detected_candidates = {}
+
+            if table_ocr:
+                sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
                 rows_grouped = []
                 current_row = []
                 last_y = -1
@@ -150,7 +177,7 @@ if all_sources:
                     box, text, score = item
                     box_y = box[0][1]
 
-                    if last_y == -1 or abs(box_y - last_y) < 30:
+                    if last_y == -1 or abs(box_y - last_y) < 20:
                         current_row.append(item)
                         if last_y == -1:
                             last_y = box_y
@@ -166,51 +193,36 @@ if all_sources:
                     full_row_text = " ".join([item[1] for item in group_sorted]).strip()
                     upper_text = full_row_text.upper()
 
-                    # Skip general metadata headers
-                    if any(w in upper_text for w in ["INDEPENDENT ELECTORAL", "STATION NAME", "REGISTRATION", "POLLING STATION", "WARD", "CONSTITUENCY", "COUNTY", "CODE"]):
-                        continue
-
-                    if "TOTAL" in upper_text or "VALID VOTES" in upper_text:
-                        num_matches = re.findall(r'\d+', full_row_text)
-                        if num_matches:
-                            stated_total_votes = num_matches[-1]
-                        continue
-
-                    # Look for any row starting with a candidate number or containing candidate names
-                    match_num = re.match(r'^([1-9])[\.\s]+(.*)', full_row_text)
+                    # Strict filter: Only accept lines that begin with a single digit 1 through 8
+                    match_num = re.match(r'^([1-8])[\.\s]+(.*)', full_row_text)
                     if match_num:
                         c_num = int(match_num.group(1))
                         c_content = match_num.group(2).strip()
+                        
+                        # Extract vote numbers at the tail end of the row
                         num_matches = re.findall(r'\d+', c_content)
                         vote_val = num_matches[-1] if num_matches else "0"
                         name_part = re.sub(r'\s+' + vote_val + r'$', '', c_content).strip()
                         if not name_part:
                             name_part = c_content
 
-                        detected_candidates[c_num] = {
-                            "Candidate #": c_num,
-                            "Candidate Name / Row": f"{c_num}. {name_part}",
-                            "Votes Obtained": vote_val
-                        }
+                        # Filter out any accidental non-candidate text
+                        if len(name_part) > 2 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+                            detected_candidates[c_num] = {
+                                "Candidate #": c_num,
+                                "Candidate Name / Row": f"{c_num}. {name_part}",
+                                "Votes Obtained": vote_val
+                            }
 
             if detected_candidates:
                 for c_num in sorted(detected_candidates.keys()):
                     extracted_rows.append(detected_candidates[c_num])
             else:
-                # Fallback if strict numbering wasn't caught: grab any text lines containing candidate-like uppercase names
-                row_idx = 1
-                for group in rows_grouped:
-                    group_sorted = sorted(group, key=lambda r: r[0][0][0])
-                    row_text = " ".join([item[1] for item in group_sorted]).strip()
-                    if len(row_text) > 6 and not any(w in row_text.upper() for w in ["FORM", "COMMISSION", "RESULTS", "STATION", "WARD", "DECLARATION", "AGENT"]):
-                        num_matches = re.findall(r'\d+', row_text)
-                        vote_val = num_matches[-1] if num_matches else "0"
-                        extracted_rows.append({
-                            "Candidate #": row_idx,
-                            "Candidate Name / Row": row_text,
-                            "Votes Obtained": vote_val
-                        })
-                        row_idx += 1
+                extracted_rows.append({
+                    "Candidate #": 1,
+                    "Candidate Name / Row": "Ensure form is well-lit and aligned in frame.",
+                    "Votes Obtained": "0"
+                })
 
             # Append Official Total Valid Votes Row
             extracted_rows.append({
@@ -222,7 +234,7 @@ if all_sources:
             processed_data.append({
                 "Form / File Name": filename,
                 "Parsed Rows": len(extracted_rows),
-                "Status": "🟢 FULL SCAN READY"
+                "Status": "🟢 STRICT SCAN READY"
             })
 
             parsed_extractions[filename] = {
