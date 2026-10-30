@@ -6,6 +6,33 @@ from PIL import Image
 import re
 from rapidocr_onnxruntime import RapidOCR
 
+# ==========================================
+# TRIAL & ADMIN BYPASS CODE
+# ==========================================
+if "trial_count" not in st.session_state:
+    st.session_state.trial_count = 0
+
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+
+# Admin Sidebar Login
+with st.sidebar:
+    st.markdown("### 🔐 System Access")
+    admin_pass = st.text_input("Developer / Admin Key", type="password")
+    if admin_pass == "tazemba2026": 
+        st.session_state.is_admin = True
+        st.success("Admin Mode Active")
+
+MAX_TRIALS = 3
+if not st.session_state.is_admin:
+    if st.session_state.trial_count >= MAX_TRIALS:
+        st.error("🚨 Free Trial Limit Reached")
+        st.markdown("You have used your 3 complimentary audits. Please contact Tazemba Enterprise Sales for full access.")
+        st.stop()
+    else:
+        st.sidebar.info(f"Free Trials Remaining: {MAX_TRIALS - st.session_state.trial_count}")
+# ==========================================
+
 # Page Config & Branding
 st.set_page_config(
     page_title="Tazemba Form 34A Audit Engine",
