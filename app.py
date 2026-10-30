@@ -149,30 +149,38 @@ if all_sources:
             stated_total_votes = "0"
             detected_candidates = {}
 
-            if full_ocr:
-                sorted_ocr = sorted(full_ocr, key=lambda r: r[0][0][1])
-                rows_grouped = []
-                current_row = []
-                last_y = -1
-
-        last_y = -1
-        current_row = []
+    if full_ocr:
+        sorted_ocr = sorted(full_ocr, key=lambda b: b[0][0][1])
         rows_grouped = []
+        current_row = []
+        last_y = -1
 
-        print(f"DEBUG OCR TOTAL ITEMS FOUND: {len(ocr_results)}")
+        print(f"DEBUG OCR TOTAL ITEMS FOUND: {len(sorted_ocr)}")
 
-        for box, text, score in ocr_results:
+        for box, text, score in sorted_ocr:
+            box_y = box[0][1]
+            if last_y == -1 or abs(box_y - last_y) < 15:
+                current_row.append((box, text, score))
+                if last_y == -1:
+                    last_y = box_y
+            else:
+                rows_grouped.append(current_row)
+                current_row = [(box, text, score)]
+                last_y = box_y
+        if current_row:
+            rows_grouped.append(current_row)
 
+        print(f"DEBUG TOTAL ROWS GROUPED: {len(rows_grouped)}")
 
+        skip_keywords = [
+            "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE",
+            "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR",
+            "ELECTORAL", "BOUNDARIES", "REASONS FOR"
+        ]
+        in_candidate_section = True
 
-                skip_keywords = [
-                    "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE", 
-                    "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR CANDIDATES",
-                    "ELECTORAL", "BOUNDARIES", "REASONS FOR"
-                ]
-                in_candidate_section = True
+        for group in rows_grouped:
 
-                for group in rows_grouped:
                     group_sorted = sorted(group, key=lambda b: b[0][0])
                     full_row_text = " ".join([item[1] for item in group_sorted])
                     upper_text = full_row_text.upper()
