@@ -177,7 +177,8 @@ if all_sources:
 
                     # Capture stated total valid votes
                     if "TOTAL NUMBER OF VALID VOTES" in upper_text:
-                        num_matches = re.findall(r'\d+', full_row_text)
+                        match_num = re.match(r'^([1-8])[\.\s]*([A-Z].*)', full_row_text, re.IGNORECASE)
+
                         if num_matches:
                             stated_total_votes = num_matches[-1]
                         continue
