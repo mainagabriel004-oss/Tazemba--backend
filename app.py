@@ -188,11 +188,16 @@ if all_sources:
                             stated_total_votes = num_matches[-1]
                         continue
 
+                    if "POLLING STATION COUNTS" in upper_text or "AGENTS OR CANDIDATES" in upper_text or "DECLARATION" in upper_text:
+                        in_candidate_section = False
+                        continue
+
                     if not in_candidate_section:
                         continue
 
                     if any(kw in upper_text for kw in skip_keywords):
                         continue
+
 
                     match_num = re.search(r'\b([1-8])[\.\s]+([A-Z].*)', full_row_text)
                     if match_num:
