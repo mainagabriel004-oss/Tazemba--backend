@@ -194,9 +194,11 @@ if all_sources:
 
                     if any(kw in upper_text for kw in skip_keywords):
                         continue
-
-
+        # Debug check to see what lines OCR is processing
+        print(f"DEBUG ROW: {full_row_text}")
+        
         match_num = re.search(r'\b([1-8])[\.\s]+([A-Za-z].*)', full_row_text)
+
         if match_num:
             c_num = int(match_num.group(1))
             c_content = match_num.group(2).strip()
