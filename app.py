@@ -158,20 +158,21 @@ if all_sources:
                         rows_grouped.append(current_row)
                         current_row = [item]
                         last_y = box_y
-                if current_row:
-                    rows_grouped.append(current_row)
+                        if current_row:
+            rows_grouped.append(current_row)
 
-    in_candidate_section = True
-    for group in rows_grouped:
+        skip_keywords = [
+            "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE", 
+            "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR CANDIDATES",
+            "ELECTORAL", "BOUNDARIES", "REASONS FOR"
+        ]
+        in_candidate_section = True
+        for group in rows_grouped:
+
         group_sorted = sorted(group, key=lambda b: b[0][0])
         full_row_text = " ".join([item[1] for item in group_sorted])
         upper_text = full_row_text.upper()
 
-        # Stop parsing candidates once we hit total votes or declaration/agent sections
-        if any(term in upper_text for term in ["TOTAL NUMBER OF VALID VOTES", "DECLARATION", "AGENTS OR CANDIDATES"]):
-            in_candidate_section = False
-
-        # Capture stated total valid votes
         if "TOTAL NUMBER OF VALID VOTES" in upper_text:
             num_matches = re.findall(r'\d+', full_row_text)
             if num_matches:
