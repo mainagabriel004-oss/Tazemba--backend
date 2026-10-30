@@ -123,7 +123,7 @@ if all_sources:
     # Process files once loaded
     for filename, file_bytes in all_sources:
         nparr = np.frombuffer(file_bytes, np.uint8)
-        img_cv = cv2.imdecode(nparr, np.IMREAD_COLOR)
+        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if img_cv is not None:
             img_height, img_width = img_cv.shape[:2]
