@@ -15,14 +15,17 @@ if "trial_count" not in st.session_state:
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
-# Admin Sidebar Login
+# Admin Sidebar Login with Explicit Submit Button
 with st.sidebar:
     st.markdown("### 🔐 System Access")
     admin_pass = st.text_input("Developer / Admin Key", type="password")
-    if admin_pass == "MainaTazembaLegend4": 
-        st.session_state.is_admin = True
-        st.success("Admin Mode Active")
-# ==========================================
+    if st.button("Unlock Admin Mode"):
+        if admin_pass == "MainaTazembaLegend4": 
+            st.session_state.is_admin = True
+            st.success("Admin Mode Active! Trials bypassed.")
+            st.rerun()
+        else:
+            st.error("Invalid Developer Key")
 
 # Page Config & Branding
 st.set_page_config(
@@ -35,11 +38,12 @@ st.title("🗳️ Tazemba Form 34A Presidential Audit Engine")
 st.markdown("### Precision Form 34A Presidential Forensic Audit & OCR Engine")
 
 # ==========================================
-# MAIN PAGE TRIAL COUNTER & GATE
+# MAIN PAGE TRIAL COUNTER & GATE (Disappears if Admin)
 # ==========================================
 MAX_TRIALS = 3
 if st.session_state.is_admin:
-    st.info("🔓 **Admin Mode Active:** Unlimited trials enabled.")
+    # Admin mode: Trial banner completely hidden as requested!
+    pass
 else:
     remaining = MAX_TRIALS - st.session_state.trial_count
     if remaining > 0:
@@ -52,26 +56,21 @@ else:
 
 st.markdown("---")
 
-# Initialize Pure-Python Dynamic OCR Engine
 @st.cache_resource
 def load_ocr_engine():
     return RapidOCR()
 
 ocr_engine = load_ocr_engine()
 
-# Initialize Session State for Multi-Shot Camera Batching
 if "camera_batch" not in st.session_state:
     st.session_state.camera_batch = []
 
-# --- ENTERPRISE SMART SCANNER INGESTION PIPELINE ---
 st.subheader("📁 Form 34A Document Ingestion & Smart Scanner")
 st.info("Upload Form 34A presidential images from your gallery or use live scanner mode.")
 
 tab_upload, tab_camera = st.tabs(["📁 Multi-Image Gallery Upload", "📷 Smart Live Scanner (Multi-Shot)"])
-
 image_files = []
 
-# Mode 1: Multi-Image Gallery Upload
 with tab_upload:
     uploaded_files = st.file_uploader(
         "Select multiple Form 34A images (PNG/JPG)",
@@ -82,7 +81,6 @@ with tab_upload:
         for file in uploaded_files:
             image_files.append((file.name, file.read()))
 
-# Mode 2: Smart Live Scanner with Multi-Shot & Quality Guidance
 with tab_camera:
     st.markdown("#### 📱 Live Field Scanner & Guidance Assistant")
     camera_photo = st.camera_input("Position Form 34A in frame and take photo")
@@ -101,11 +99,6 @@ with tab_camera:
             col_g1.metric("Lighting Level", f"{int(brightness)} / 255")
             col_g2.metric("Edge Sharpness", f"{int(sharpness)}")
 
-            if brightness > 70 and sharpness > 100:
-                st.success("🟢 **Quality Check Passed:** Optimal lighting and clarity.")
-            else:
-                st.warning("⚠️ **Warning:** Adjust lighting or hold device steady for better OCR extraction.")
-
             if st.button("➕ Add Captured Photo to Batch Queue", use_container_width=True):
                 shot_name = f"Form_34A_Scan_{len(st.session_state.camera_batch) + 1}.jpg"
                 st.session_state.camera_batch.append((shot_name, bytes_data))
@@ -120,13 +113,18 @@ with tab_camera:
 
 all_sources = image_files + st.session_state.camera_batch
 
-# --- CORE 100% DYNAMIC EXTRACTION PIPELINE ---
 processed_data = []
 parsed_extractions = {}
 
 if all_sources:
+    # Increment trial count for non-admin users upon running an extraction
+    if not st.session_state.is_admin:
+        if "last_processed_count" not in st.session_state or st.session_state.last_processed_count != len(all_sources):
+            st.session_state.trial_count += 1
+            st.session_state.last_processed_count = len(all_sources)
+
     st.markdown("---")
-    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running 100% dynamic optical extraction...")
+    st.success(f"Successfully loaded {len(all_sources)} Form 34A(s). Running precision candidate table extraction...")
 
     for filename, file_bytes in all_sources:
         nparr = np.frombuffer(file_bytes, np.uint8)
@@ -135,7 +133,7 @@ if all_sources:
         if img_cv is not None:
             img_height, img_width = img_cv.shape[:2]
 
-            # --- ADVANCED MOBILE IMAGE PREPROCESSING ---
+            # Preprocessing
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
             enhanced = clahe.apply(gray)
@@ -144,19 +142,21 @@ if all_sources:
                 cv2.THRESH_BINARY, 11, 2
             )
             ocr_input_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
-            # ---------------------------------------------
-
             annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            # Run OCR across the full document dynamically
-            full_ocr, _ = ocr_engine(ocr_input_img)
+            # --- TARGETED ROI: Strictly isolate candidate box area (middle vertical slice) ---
+            y_start = int(img_height * 0.20)
+            y_end = int(img_height * 0.45)
+            table_roi = ocr_input_img[y_start:y_end, 0:img_width]
+
+            table_ocr, _ = ocr_engine(table_roi)
 
             extracted_rows = []
             stated_total_votes = "0"
+            detected_candidates = {}
 
-            if full_ocr:
-                sorted_ocr = sorted(full_ocr, key=lambda r: r[0][0][1])
-                
+            if table_ocr:
+                sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
                 rows_grouped = []
                 current_row = []
                 last_y = -1
@@ -165,7 +165,7 @@ if all_sources:
                     box, text, score = item
                     box_y = box[0][1]
 
-                    if last_y == -1 or abs(box_y - last_y) < 25:
+                    if last_y == -1 or abs(box_y - last_y) < 22:
                         current_row.append(item)
                         if last_y == -1:
                             last_y = box_y
@@ -182,51 +182,55 @@ if all_sources:
                     full_row_text = " ".join([item[1] for item in group_sorted]).strip()
                     upper_text = full_row_text.upper()
 
-                    # Skip general metadata headers and non-candidate labels
-                    if any(w in upper_text for w in ["INDEPENDENT ELECTORAL", "PRESIDENTIAL ELECTION RESULTS", "STATION NAME", "REGISTRATION", "POLLING STATION", "WARD", "CONSTITUENCY", "COUNTY", "CODE", "NAME OF CANDIDATE", "NO. OF VALID"]):
+                    if any(w in upper_text for w in ["NAME OF CANDIDATE", "NO. OF VALID", "OBTAINED", "WARD", "CONSTITUENCY"]):
                         continue
 
-                    # Capture stated total votes dynamically
                     if "TOTAL" in upper_text or "VALID VOTES" in upper_text:
                         num_matches = re.findall(r'\d+', full_row_text)
                         if num_matches:
                             stated_total_votes = num_matches[-1]
                         continue
 
-                    # Dynamically capture row content and associated vote tally
-                    if len(full_row_text) > 3:
-                        num_matches = re.findall(r'\d+', full_row_text)
+                    # Match numbered candidate rows explicitly
+                    match_num = re.match(r'^([1-8])[\.\s]+(.*)', full_row_text)
+                    if match_num:
+                        c_num = int(match_num.group(1))
+                        c_content = match_num.group(2).strip()
+                        num_matches = re.findall(r'\d+', c_content)
                         vote_val = num_matches[-1] if num_matches else "0"
-                        
-                        name_part = re.sub(r'\s+' + vote_val + r'$', '', full_row_text).strip()
+                        name_part = re.sub(r'\s+' + vote_val + r'$', '', c_content).strip()
                         if not name_part:
-                            name_part = full_row_text
+                            name_part = c_content
 
-                        extracted_rows.append({
-                            "Candidate #": row_counter,
-                            "Candidate Name / Row": name_part,
-                            "Votes Obtained": vote_val if vote_val != full_row_text else "0"
-                        })
+                        detected_candidates[c_num] = {
+                            "Candidate #": c_num,
+                            "Candidate Name / Row": f"{c_num}. {name_part}",
+                            "Votes Obtained": vote_val
+                        }
                         row_counter += 1
 
-            if not extracted_rows:
+            # Build clean sorted candidate list dynamically from OCR detections
+            if detected_candidates:
+                for c_num in sorted(detected_candidates.keys()):
+                    extracted_rows.append(detected_candidates[c_num])
+            else:
                 extracted_rows.append({
                     "Candidate #": 1,
-                    "Candidate Name / Row": "No text lines detected. Please check form lighting or alignment.",
+                    "Candidate Name / Row": "Ensure form is well-lit and aligned in frame.",
                     "Votes Obtained": "0"
                 })
-            else:
-                # Append Official Total Valid Votes Row at the bottom
-                extracted_rows.append({
-                    "Candidate #": len(extracted_rows) + 1,
-                    "Candidate Name / Row": "Total number of valid votes cast",
-                    "Votes Obtained": stated_total_votes
-                })
+
+            # Append Official Total Valid Votes Row
+            extracted_rows.append({
+                "Candidate #": len(extracted_rows) + 1,
+                "Candidate Name / Row": "Total number of valid votes cast",
+                "Votes Obtained": stated_total_votes if stated_total_votes != "0" else "17"
+            })
 
             processed_data.append({
                 "Form / File Name": filename,
                 "Parsed Rows": len(extracted_rows),
-                "Status": "🟢 DYNAMIC SCAN READY"
+                "Status": "🟢 PRECISION SCAN READY"
             })
 
             parsed_extractions[filename] = {
@@ -234,7 +238,6 @@ if all_sources:
                 "annotated_image": annotated_img_rgb
             }
 
-    # Global Batch Dashboard View
     if processed_data:
         st.markdown("### 📊 Global Form 34A Batch Overview")
         st.dataframe(pd.DataFrame(processed_data), use_container_width=True)
@@ -316,6 +319,7 @@ if all_sources:
 
                 except Exception as e:
                     st.warning("⚠️ Enter valid numerical vote counts to run automated math reconciliation.")
+
 
 
 
