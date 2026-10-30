@@ -243,7 +243,8 @@ if all_sources:
     # Save to session state for refresh resilience
     st.session_state.saved_processed_data = processed_data
 
-if st.session_state.saved_processed_data:
+if st.session_state.get('saved_processed_data', []):
+
     st.markdown("### 📊 Global Form 34A Batch Overview")
     st.dataframe(pd.DataFrame(st.session_state.saved_processed_data), use_container_width=True)
 
