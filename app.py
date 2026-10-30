@@ -155,20 +155,15 @@ if all_sources:
                 current_row = []
                 last_y = -1
 
-                for item in sorted_ocr:
-                    box, text, score = item
-                    box_y = box[0][1]
+                        last_y = -1
+        current_row = []
+        rows_grouped = []
 
-                    if last_y == -1 or abs(box_y - last_y) < 25:
-                        current_row.append(item)
-                        if last_y == -1:
-                            last_y = box_y
-                    else:
-                        rows_grouped.append(current_row)
-                        current_row = [item]
-                        last_y = box_y
-                if current_row:
-                    rows_grouped.append(current_row)
+        print(f"DEBUG OCR TOTAL ITEMS FOUND: {len(ocr_results)}")
+
+        for box, text, score in ocr_results:
+
+
 
                 skip_keywords = [
                     "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE", 
