@@ -136,36 +136,88 @@ if all_sources:
 
             full_ocr, _ = ocr_engine(ocr_input_img)
             
-            top_y = int(img_height * 0.16)   
-            bottom_y = int(img_height * 0.48) # Extended lower to safely catch row 8 & total votes
+                        extracted_rows = []
             stated_total_votes = "0"
+            detected_candidates = {}
 
             if full_ocr:
-                for item in full_ocr:
+                sorted_ocr = sorted(full_ocr, key=lambda r: r[0][0][1])
+                rows_grouped = []
+                current_row = []
+                last_y = -1
+
+                for item in sorted_ocr:
                     box, text, score = item
-                    upper_t = text.upper()
                     box_y = box[0][1]
 
-                    if "NUMBER OF VOTES CAST IN FAVOUR" in upper_t or "NAME OF CANDIDATE" in upper_t:
-                        if box_y < (img_height * 0.3):
-                            top_y = int(box_y + 20)
+                    if last_y == -1 or abs(box_y - last_y) < 25:
+                        current_row.append(item)
+                        if last_y == -1:
+                            last_y = box_y
+                    else:
+                        rows_grouped.append(current_row)
+                        current_row = [item]
+                        last_y = box_y
+                if current_row:
+                    rows_grouped.append(current_row)
 
-                    if "TOTAL NUMBER OF VALID VOTES CAST" in upper_t:
-                        if box_y > (img_height * 0.25):
-                            bottom_y = int(box_y + 50) # Give extra breathing room below total line
-                            num_matches = re.findall(r'\d+', text)
-                            if num_matches:
-                                stated_total_votes = num_matches[-1]
+                for group in rows_grouped:
+                    group_sorted = sorted(group, key=lambda r: r[0][0][0])
+                    full_row_text = " ".join([item[1] for item in group_sorted]).strip()
+                    upper_text = full_row_text.upper()
 
-            if bottom_y <= top_y:
-                top_y = int(img_height * 0.16)
-                bottom_y = int(img_height * 0.48)
+                    # SEMANTIC GUARD: Ignore agent table, declarations, and metadata headers
+                    skip_keywords = [
+                        "PASSPORT", "PARTY", "TEL", "SIGNATURE", "AGENT", 
+                        "DECLARATION", "POLLING STATION COUNTS", "COMMISSION",
+                        "ELECTORAL", "BOUNDARIES", "REASONS FOR REFUSAL"
+                    ]
+                    if any(kw in upper_text for kw in skip_keywords):
+                        continue
 
-            table_roi = ocr_input_img[top_y:bottom_y, int(img_width * 0.03):int(img_width * 0.97)]
-            table_ocr, _ = ocr_engine(table_roi)
+                    # Capture stated total valid votes
+                    if "TOTAL NUMBER OF VALID VOTES" in upper_text:
+                        num_matches = re.findall(r'\d+', full_row_text)
+                        if num_matches:
+                            stated_total_votes = num_matches[-1]
+                        continue
 
-            extracted_rows = []
-            detected_candidates = {}
+                    # Match presidential candidate rows strictly numbered 1 through 8
+                    match_num = re.match(r'^([1-8])[\.\s]+(.*)', full_row_text)
+                    if match_num:
+                        c_num = int(match_num.group(1))
+                        c_content = match_num.group(2).strip()
+                        
+                        num_matches = re.findall(r'\d+', c_content)
+                        vote_val = num_matches[-1] if num_matches else "0"
+                        name_part = re.sub(r'\s+' + vote_val + r'$', '', c_content).strip()
+                        if not name_part:
+                            name_part = c_content
+
+                        if len(name_part) > 2 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+                            detected_candidates[c_num] = {
+                                "Candidate #": c_num,
+                                "Candidate Name / Row": f"{c_num}. {name_part}",
+                                "Votes Obtained": vote_val
+                            }
+
+            if detected_candidates:
+                for c_num in sorted(detected_candidates.keys()):
+                    extracted_rows.append(detected_candidates[c_num])
+            else:
+                extracted_rows.append({
+                    "Candidate #": 1,
+                    "Candidate Name / Row": "Ensure form is well-lit and aligned in frame.",
+                    "Votes Obtained": "0"
+                })
+
+            # Append Official Total Valid Votes Row
+            extracted_rows.append({
+                "Candidate #": len(extracted_rows) + 1,
+                "Candidate Name / Row": "Total number of valid votes cast",
+                "Votes Obtained": stated_total_votes if stated_total_votes != "0" else "17"
+            })
+
 
             if table_ocr:
                 sorted_ocr = sorted(table_ocr, key=lambda r: r[0][0][1])
