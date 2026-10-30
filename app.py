@@ -26,11 +26,8 @@ with st.sidebar:
         else:
             st.error("Invalid Developer Key")
 
-st.set_page_config(
-    page_title="Tazemba Form 34A Presidential Audit Engine",
-    page_icon="🗳️",
-    layout="wide"
-)
+st.set_page_config(page_title="Tazemba Form 34A Presidential Audit Engine", page_icon="🗳️", layout="wide")
+
 
 st.title("🗳️ Tazemba Form 34A Presidential Audit Engine")
 st.markdown("### Precision Form 34A Presidential Forensic Audit & OCR Engine")
@@ -71,8 +68,8 @@ with tab_upload:
         accept_multiple_files=True
     )
     if uploaded_files:
-        for file in uploaded_files:
-            image_files.append((file.name, file.read()))
+        st.session_state.uploaded_batch = [(file.name, file.read()) for file in uploaded_files]
+
 
 with tab_camera:
     st.markdown("#### 📱 Live Field Scanner & Guidance Assistant")
