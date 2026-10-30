@@ -210,7 +210,7 @@ if all_sources:
                 name_part = c_content
 
 
-                        if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+             if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
                             detected_candidates[c_num] = {
                                 "Candidate #": c_num,
                                 "Candidate Name / Row": f"{c_num}. {name_part}",
