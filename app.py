@@ -158,16 +158,14 @@ if all_sources:
                         rows_grouped.append(current_row)
                         current_row = [item]
                         last_y = box_y
-                        if current_row:
-            rows_grouped.append(current_row)
-
-        skip_keywords = [
-            "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE", 
-            "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR CANDIDATES",
-            "ELECTORAL", "BOUNDARIES", "REASONS FOR"
-        ]
-        in_candidate_section = True
-        for group in rows_grouped:
+    skip_keywords = [
+        "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE", 
+        "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR CANDIDATES",
+        "ELECTORAL", "BOUNDARIES", "REASONS FOR"
+    ]
+    in_candidate_section = True
+    for group in rows_grouped:
+ 
 
         group_sorted = sorted(group, key=lambda b: b[0][0])
         full_row_text = " ".join([item[1] for item in group_sorted])
