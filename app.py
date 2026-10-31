@@ -237,14 +237,7 @@ if all_sources:
                         "annotated_image": annotated_img_rgb
                     }
 
-                    else:
-                        processed_data.append({
-                            "Form / File Name": filename,
-                            "Parsed Rows": 0,
-                            "Calculated Candidate Sum": 0,
-                            "Stated Total Votes": 0,
-                            "Status": "⚠️ UNREADABLE TEXT"
-                        })
+                    
                 else:
                     processed_data.append({
                         "Form / File Name": filename,
