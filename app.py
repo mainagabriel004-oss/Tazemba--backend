@@ -176,11 +176,14 @@ if all_sources:
                                 c_num = int(match_num.group(1))
                                 c_content = match_num.group(2).strip()
 
-                                # Extract all numbers, but EXCLUDE the row index itself (c_num) from being picked as a vote!
+                                                                # Strip the leading row index number safely, then grab the real vote
                                 all_nums = [int(v) for v in re.findall(r'\d+', text)]
-                                valid_votes = [v for v in all_nums if v != c_num and 0 <= v <= 150]
+                                if all_nums and all_nums[0] == c_num:
+                                    all_nums = all_nums[1:]
                                 
+                                valid_votes = [v for v in all_nums if 0 <= v <= 200]
                                 vote_val = str(valid_votes[-1]) if valid_votes else "0"
+
 
                                 # Clean up candidate name dynamically without hardcoding
                                 name_part = re.sub(r'[\d\s]{4,}.*', '', c_content)
