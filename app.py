@@ -160,7 +160,7 @@ if all_sources:
                         ]
                         in_candidate_section = True
 
-                                            for group in rows_grouped:
+                        for group in rows_grouped:
                         group_sorted = sorted(group, key=lambda b: b[0][0])
                         full_row_text = " ".join([item[1] for item in group_sorted])
                         upper_text = full_row_text.upper()
