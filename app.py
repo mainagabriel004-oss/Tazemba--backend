@@ -176,6 +176,10 @@ if all_sources:
                         if not in_candidate_section or any(kw in upper_text for kw in skip_keywords):
                             continue
 
+                        # Set safe defaults for every row
+                        vote_val = "0"
+                        c_content = ""
+
                         # Strictly match Candidate numbers 1 through 8
                         match_num = re.search(r'\b([1-8])[\.\-\s]*([A-Za-z].*)', full_row_text)
                         if match_num:
@@ -185,6 +189,7 @@ if all_sources:
                             # Extract vote values safely using the defined c_num
                             vote_matches = [v for v in re.findall(r'\b\d{1,3}\b', full_row_text) if int(v) != c_num]
                             vote_val = vote_matches[-1] if vote_matches else "0"
+
 
 
                             
