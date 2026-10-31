@@ -100,7 +100,13 @@ with tab_camera:
 
 # Prevent duplicates and protect data on refresh
 seen = set()
-all_sources = [(n, d) for n, d in (st.session_state.get('uploaded_batch', []) + st.session_state.get('camera_batch', [])) if not (n in seen or seen.add(n))]
+all_sources = []
+for n, d in (st.session_state.get('uploaded_batch', []) + st.session_state.get('camera_batch', [])):
+    identifier = (n, len(d))
+    if identifier not in seen:
+        seen.add(identifier)
+        all_sources.append((n, d))
+
 
 if all_sources:
     st.markdown("---")
