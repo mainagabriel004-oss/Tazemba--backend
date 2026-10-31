@@ -141,14 +141,12 @@ if all_sources:
             st.rerun()
 
     if run_audit_clicked:
-        # Increment trial counter if not admin
         if not st.session_state.is_admin:
             st.session_state.trial_count += len(all_sources)
 
         processed_data = []
         parsed_extractions = {}
 
-        # Uncapped processing loop over all queue files
         for filename, file_bytes in all_sources:
             try:
                 img_cv, _ = optimize_image_bytes(file_bytes)
@@ -156,55 +154,48 @@ if all_sources:
                 if img_cv is not None:
                     ocr_result, _ = ocr(img_cv)
                     
+                    # GUARANTEED CANDIDATE SLATE (Includes Aukot #1 and all 8 candidates)
                     detected_candidates = {}
+                    for i in range(1, 9):
+                        detected_candidates[i] = {
+                            "Candidate #": i,
+                            "Candidate Name / Row": f"{i}. CANDIDATE {i}",
+                            "Votes Obtained": "0"
+                        }
+                    
+                    candidate_names = {
+                        1: "1. AUROT EKURU APAKOT",
+                        2: "2. DIDA MOHAMED ABDUBA",
+                        3: "3. JIRONGO SHAKHALAGA KHWA",
+                        4: "4. KALUYU JAPHETH KAVINGA",
+                        5: "5. KENYATTA UHURU",
+                        6: "6. MWAURA MICHAEL WAINAINA",
+                        7: "7. NYAGAH JOSEPH WILLIAM NTHIG",
+                        8: "8. ODINGA RAILA"
+                    }
+                    for c_num, c_name in candidate_names.items():
+                        detected_candidates[c_num]["Candidate Name / Row"] = c_name
+
                     stated_total = 0
 
                     if ocr_result:
                         for line in ocr_result:
                             bbox, text, score = line
-                            vote_val = "0"
-                            c_content = ""
-
-                            # Match candidate rows strictly (1 to 8)
-                            match_num = re.search(r'\b([1-8])[\.\-\s](.*)', text)
+                            
+                            match_num = re.search(r'\b([1-8])[\.\-\s]', text)
                             if match_num:
                                 c_num = int(match_num.group(1))
-                                c_content = match_num.group(2).strip()
-
-                                # Strict number parsing to filter out serial numbers and coordinates
                                 all_nums = [int(v) for v in re.findall(r'\d+', text)]
                                 valid_votes = [v for v in all_nums if 0 <= v <= 200]
                                 
-                                vote_val = str(valid_votes[-1]) if valid_votes else "0"
+                                if valid_votes:
+                                    detected_candidates[c_num]["Votes Obtained"] = str(valid_votes[-1])
 
-                                name_part = re.sub(r'[\d\s]{4,}.*', '', c_content)
-                                if not name_part:
-                                    name_part = c_content
-
-                                if c_num not in detected_candidates:
-                                    detected_candidates[c_num] = {
-                                        "Candidate #": c_num,
-                                        "Candidate Name / Row": f"{c_num}. {name_part.upper()}",
-                                        "Votes Obtained": vote_val
-                                    }
-
-                            # Detect stated total votes cast accurately
                             if "total" in text.lower() or "valid votes" in text.lower() or "cde" in text.lower():
                                 total_matches = [int(m) for m in re.findall(r'\d+', text)]
                                 plausible_totals = [m for m in total_matches if 0 < m < 10000]
                                 if plausible_totals:
                                     stated_total = plausible_totals[-1]
-
-                    # Fallback defaults if OCR structure requires baseline initialization
-                    if not detected_candidates:
-                        for i in range(1, 9):
-                            detected_candidates[i] = {
-                                "Candidate #": i,
-                                "Candidate Name / Row": f"{i}. CANDIDATE {i}",
-                                "Votes Obtained": "0"
-                            }
-                        detected_candidates[5]["Votes Obtained"] = "16"
-                        stated_total = 16
 
                     df_rows = list(detected_candidates.values())
                     df_rows.append({
@@ -219,7 +210,6 @@ if all_sources:
                         "image": img_cv
                     }
 
-                    # Calculate sums correctly
                     cand_sum = sum(int(row["Votes Obtained"]) for row in df_rows[:-1] if str(row["Votes Obtained"]).isdigit())
                     form_total = int(df_rows[-1]["Votes Obtained"]) if str(df_rows[-1]["Votes Obtained"]).isdigit() else cand_sum
                     status = "PASSED" if cand_sum == form_total else "DISCREPANCY DETECTED"
@@ -238,7 +228,7 @@ if all_sources:
 
         if processed_data:
             st.session_state.processed_data = processed_data
-            st.session_state.parsed_extractions = parsed_extractions
+            st.session_state.parsed_extractions = processed_data
 
     # Render Global Results
     if 'processed_data' in st.session_state and st.session_state.processed_data:
@@ -313,6 +303,7 @@ if all_sources:
                         st.error(f"🔴 **AUDIT STATUS: DISCREPANCY DETECTED** — Discrepancy of {abs(calculated_sum - stated_form_total)} votes found between candidate sum and stated total!")
                 except Exception as ex:
                     st.warning(f"Ensure all vote entries are valid integers for real-time reconciliation. ({ex})")
+
 
 
 
