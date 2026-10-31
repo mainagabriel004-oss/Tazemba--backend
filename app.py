@@ -5,19 +5,38 @@ import pandas as pd
 import re
 from rapidocr_onnxruntime import RapidOCR
 
-# Initialize OCR engine
+# Initialize OCR engine with caching for speed
 @st.cache_resource
 def load_ocr():
     return RapidOCR()
 
 ocr = load_ocr()
 
+# Fast image resize helper to accelerate OCR extraction and reduce memory footprint
+def optimize_image_bytes(file_bytes, max_dim=1280):
+    try:
+        nparr = np.frombuffer(file_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return None, file_bytes
+        
+        h, w = img.shape[:2]
+        if max(h, w) > max_dim:
+            scale = max_dim / float(max(h, w))
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        
+        return img, file_bytes
+    except Exception:
+        return None, file_bytes
+
 st.set_page_config(page_title="Tazemba Form 34A Audit Engine", layout="wide")
 
 st.title("🏛️ Tazemba Presidential Form 34A Forensic Audit Engine")
-st.markdown("Automated Batch Extraction, Mathematical Cross-Verification, & Historical Stacking")
+st.markdown("Automated High-Speed Batch Extraction, Mathematical Reconciliation, & Historical Stacking")
 
-# Initialize Session State
+# Initialize Session State Variables
 if 'uploaded_batch' not in st.session_state:
     st.session_state.uploaded_batch = []
 if 'camera_batch' not in st.session_state:
@@ -28,13 +47,21 @@ if 'is_admin' not in st.session_state:
     st.session_state.is_admin = False
 if 'trial_count' not in st.session_state:
     st.session_state.trial_count = 0
+if 'show_camera' not in st.session_state:
+    st.session_state.show_camera = False
 
-# 🏛️ SIDEBAR: Master Archive & Admin Authentication Bypass
+# 🔐 SIDEBAR: Trial Status, Admin Password & Master Archive
 st.sidebar.header("🔐 Access & Licensing")
+
+if not st.session_state.is_admin:
+    st.sidebar.info(f"🟢 Free Trial Mode: {st.session_state.trial_count} items processed")
+else:
+    st.sidebar.success("👑 Enterprise Mode Unlocked")
+
 admin_pwd = st.sidebar.text_input("Enter Admin Password", type="password", key="admin_pwd_input")
-if admin_pwd == "tazemba2026" or admin_pwd == "admin":  # Replace/adjust your password key as needed
+if admin_pwd == "tazemba2026" or admin_pwd == "admin":
     st.session_state.is_admin = True
-    st.sidebar.success("✅ Admin Unlocked: Free Trial Limits Removed")
+    st.sidebar.success("✅ Admin Unlocked: Limits Removed")
 elif admin_pwd:
     st.sidebar.error("❌ Incorrect Password")
 
@@ -61,13 +88,13 @@ if st.session_state.archived_batches:
 else:
     st.sidebar.info("No batches archived yet.")
 
-# 📁 MAIN SCREEN: Batch Document Intake & Camera Capture
+# 📁 MAIN SCREEN: Fast Batch Document Intake & Camera Capture
 st.markdown("### 📁 Batch Document Intake & Live Capture")
 col_in1, col_in2 = st.columns(2)
 
 with col_in1:
     uploaded_files = st.file_uploader(
-        "Upload Form 34A Batch (PNG/JPG)", 
+        "Upload Form 34A Batch (PNG/JPG - Fast Processing)", 
         type=["png", "jpg", "jpeg"], 
         accept_multiple_files=True,
         key="file_uploader_key"
@@ -76,13 +103,18 @@ with col_in1:
         st.session_state.uploaded_batch = [(file.name, file.getvalue()) for file in uploaded_files]
 
 with col_in2:
-    camera_file = st.camera_input("Capture Form 34A")
-    if camera_file:
-        shot_name = f"Form_34A_Scan_{len(st.session_state.camera_batch)+1}.jpg"
-        st.session_state.camera_batch.append((shot_name, camera_file.getvalue()))
-        st.success(f"Captured! Total camera queue: {len(st.session_state.camera_batch)}")
+    st.markdown("#### 📷 Camera Capture Station")
+    if st.button("📷 Open / Toggle Live Camera"):
+        st.session_state.show_camera = not st.session_state.show_camera
 
-# Prevent duplicates using both filename and file byte length (Fully uncapped queue)
+    if st.session_state.show_camera:
+        camera_file = st.camera_input("Snap Form 34A")
+        if camera_file:
+            shot_name = f"Form_34A_Scan_{len(st.session_state.camera_batch)+1}.jpg"
+            st.session_state.camera_batch.append((shot_name, camera_file.getvalue()))
+            st.success(f"Captured! Total camera queue: {len(st.session_state.camera_batch)}")
+
+# Duplicate prevention via unique identifier tuple (filename, byte length)
 seen = set()
 all_sources = []
 for n, d in (st.session_state.get('uploaded_batch', []) + st.session_state.get('camera_batch', [])):
@@ -93,9 +125,11 @@ for n, d in (st.session_state.get('uploaded_batch', []) + st.session_state.get('
 
 if all_sources:
     st.markdown("---")
+    st.info(f"📋 Total Queue Loaded: **{len(all_sources)} documents ready for fast processing.**")
+    
     col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
-        run_audit_clicked = st.button("🚀 Run Form 34A Forensic Extraction & Audit (Process All)")
+        run_audit_clicked = st.button(f"🚀 Run Fast Forensic Extraction & Audit ({len(all_sources)} files)")
     with col_btn2:
         if st.button("🗑️ Delete & Clear Selection Queue"):
             st.session_state.uploaded_batch = []
@@ -107,17 +141,19 @@ if all_sources:
             st.rerun()
 
     if run_audit_clicked:
+        # Increment trial counter if not admin
+        if not st.session_state.is_admin:
+            st.session_state.trial_count += len(all_sources)
+
         processed_data = []
         parsed_extractions = {}
 
-        # Process files with Graceful Error Handling & Full Queue Iteration
+        # Uncapped processing loop over all queue files
         for filename, file_bytes in all_sources:
             try:
-                nparr = np.frombuffer(file_bytes, np.uint8)
-                img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                img_cv, _ = optimize_image_bytes(file_bytes)
 
                 if img_cv is not None:
-                    # Run RapidOCR extraction
                     ocr_result, _ = ocr(img_cv)
                     
                     detected_candidates = {}
@@ -126,7 +162,6 @@ if all_sources:
                     if ocr_result:
                         for line in ocr_result:
                             bbox, text, score = line
-                            
                             vote_val = "0"
                             c_content = ""
 
@@ -136,11 +171,11 @@ if all_sources:
                                 c_num = int(match_num.group(1))
                                 c_content = match_num.group(2).strip()
 
-                                vote_matches = [v for v in re.findall(r'\d+', text)]
-                                vote_val = vote_matches[-1] if vote_matches else "0"
-
-                                if int(vote_val) > 100:
-                                    vote_val = "0"
+                                # Strict number parsing to filter out serial numbers and coordinates
+                                all_nums = [int(v) for v in re.findall(r'\d+', text)]
+                                valid_votes = [v for v in all_nums if 0 <= v <= 200]
+                                
+                                vote_val = str(valid_votes[-1]) if valid_votes else "0"
 
                                 name_part = re.sub(r'[\d\s]{4,}.*', '', c_content)
                                 if not name_part:
@@ -155,14 +190,12 @@ if all_sources:
 
                             # Detect stated total votes cast accurately
                             if "total" in text.lower() or "valid votes" in text.lower() or "cde" in text.lower():
-                                total_matches = re.findall(r'\d+', text)
-                                if total_matches:
-                                    for m_val in total_matches:
-                                        val = int(m_val)
-                                        if 0 < val < 10000:
-                                            stated_total = val
+                                total_matches = [int(m) for m in re.findall(r'\d+', text)]
+                                plausible_totals = [m for m in total_matches if 0 < m < 10000]
+                                if plausible_totals:
+                                    stated_total = plausible_totals[-1]
 
-                    # Fallback defaults if OCR structure needs stabilization
+                    # Fallback defaults if OCR structure requires baseline initialization
                     if not detected_candidates:
                         for i in range(1, 9):
                             detected_candidates[i] = {
@@ -207,7 +240,7 @@ if all_sources:
             st.session_state.processed_data = processed_data
             st.session_state.parsed_extractions = parsed_extractions
 
-    # Display Global Results if available in session state
+    # Render Global Results
     if 'processed_data' in st.session_state and st.session_state.processed_data:
         st.markdown("## 📊 Global Form 34A Batch Overview")
         batch_df = pd.DataFrame(st.session_state.processed_data)
@@ -260,7 +293,7 @@ if all_sources:
                     use_container_width=True
                 )
 
-                # Real-time Mathematical Cross-Verification
+                # Real-time Mathematical Reconciliation
                 try:
                     candidate_rows = edited_df[edited_df["Candidate #"] != 9]
                     calculated_sum = candidate_rows["Votes Obtained"].astype(int).sum()
@@ -280,6 +313,7 @@ if all_sources:
                         st.error(f"🔴 **AUDIT STATUS: DISCREPANCY DETECTED** — Discrepancy of {abs(calculated_sum - stated_form_total)} votes found between candidate sum and stated total!")
                 except Exception as ex:
                     st.warning(f"Ensure all vote entries are valid integers for real-time reconciliation. ({ex})")
+
 
 
 
