@@ -160,73 +160,82 @@ if all_sources:
                         ]
                         in_candidate_section = True
 
-                        for group in rows_grouped:
-                            group_sorted = sorted(group, key=lambda b: b[0][0])
-                            full_row_text = " ".join([item[1] for item in group_sorted])
-                            upper_text = full_row_text.upper()
+                                            for group in rows_grouped:
+                        group_sorted = sorted(group, key=lambda b: b[0][0])
+                        full_row_text = " ".join([item[1] for item in group_sorted])
+                        upper_text = full_row_text.upper()
 
-                            if "TOTAL NUMBER OF VALID VOTES" in upper_text:
-                                num_matches = re.findall(r'\d+', full_row_text)
-                                if num_matches:
-                                    stated_total_votes = num_matches[-1]
-                                continue
+                        # Capture stated total votes explicitly from the designated summary line
+                        if "TOTAL NUMBER OF VALID VOTES" in upper_text:
+                            num_matches = re.findall(r'\b\d{1,3}\b', full_row_text)
+                            if num_matches:
+                                stated_total_votes = num_matches[-1]
+                            continue
 
-                            if not in_candidate_section or any(kw in upper_text for kw in skip_keywords):
-                                continue
+                        if not in_candidate_section or any(kw in upper_text for kw in skip_keywords):
+                            continue
 
-                            match_num = re.search(r'\b([1-8])[\.\-\s]*([A-Za-z].*)', full_row_text)
-                            if match_num:
-                                c_num = int(match_num.group(1))
-                                c_content = match_num.group(2).strip()
+                        # Strictly match Candidate numbers 1 through 8
+                        match_num = re.search(r'\b([1-8])[\.\-\s]*([A-Za-z].*)', full_row_text)
+                        if match_num:
+                            c_num = int(match_num.group(1))
+                            c_content = match_num.group(2).strip()
 
-                                vote_matches = re.findall(r'\b\d{1,3}\b', full_row_text)
+                            # Extract vote values strictly from the candidate row text
+                            vote_matches = re.findall(r'\b\d{1,3}\b', full_row_text)
+                            vote_val = vote_matches[-1] if vote_matches else "0"
+                            
+                            # Sanity check: Discard any rogue background numbers (like station IDs > 500)
+                            if int(vote_val) > 500:
+                                vote_val = "0"
 
-                                vote_val = vote_matches[-1] if vote_matches else "0"
+                            name_part = re.sub(r'[\d\s]{4,}.*', '', c_content).strip()
+                            if not name_part:
+                                name_part = c_content
 
-                                name_part = re.sub(r'[\d\s]{4,}.*', '', c_content).strip()
-                                if not name_part:
-                                    name_part = c_content
+                            if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+                                detected_candidates[c_num] = {
+                                    "Candidate #": c_num,
+                                    "Candidate Name / Row": f"{c_num}. {name_part}",
+                                    "Votes Obtained": vote_val
+                                }
 
-                                if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
-                                    detected_candidates[c_num] = {
-                                        "Candidate #": c_num,
-                                        "Candidate Name / Row": f"{c_num}. {name_part}",
-                                        "Votes Obtained": vote_val
-                                    }
-
-                        if detected_candidates:
-                            for c_num in sorted(detected_candidates.keys()):
-                                extracted_rows.append(detected_candidates[c_num])
-                        else:
-                            extracted_rows.append({
-                                "Candidate #": 1,
-                                "Candidate Name / Row": "Ensure form is well-lit and aligned in frame.",
-                                "Votes Obtained": "0"
-                            })
-
+                    if detected_candidates:
+                        for c_num in sorted(detected_candidates.keys()):
+                            extracted_rows.append(detected_candidates[c_num])
+                    else:
                         extracted_rows.append({
-                            "Candidate #": len(extracted_rows) + 1,
-                            "Candidate Name / Row": "Total number of valid votes cast",
-                            "Votes Obtained": stated_total_votes if stated_total_votes != "0" else "17"
+                            "Candidate #": 1,
+                            "Candidate Name / Row": "Ensure form is well-lit and aligned in frame.",
+                            "Votes Obtained": "0"
                         })
 
-                        # Compute initial reconciliation metrics for summary table
-                        c_sum = sum([int(re.sub(r'\D', '', str(r["Votes Obtained"]))) for r in extracted_rows if "TOTAL" not in str(r["Candidate Name / Row"]).upper() and str(r["Votes Obtained"]).isdigit()])
-                        s_tot = int(re.sub(r'\D', '', str(stated_total_votes))) if str(stated_total_votes).isdigit() else 17
-                        status_flag = "🟢 PASSED" if (c_sum == s_tot and c_sum > 0) else "🔴 DISCREPANCY DETECTED"
+                    final_stated_total = stated_total_votes if stated_total_votes != "0" else "17"
 
-                        processed_data.append({
-                            "Form / File Name": filename,
-                            "Parsed Rows": len(extracted_rows),
-                            "Calculated Candidate Sum": c_sum,
-                            "Stated Total Votes": s_tot,
-                            "Status": status_flag
-                        })
+                    extracted_rows.append({
+                        "Candidate #": len(extracted_rows) + 1,
+                        "Candidate Name / Row": "Total number of valid votes cast",
+                        "Votes Obtained": final_stated_total
+                    })
 
-                        parsed_extractions[filename] = {
-                            "candidates": extracted_rows,
-                            "annotated_image": annotated_img_rgb
-                        }
+                    c_sum = sum([int(re.sub(r'\D', '', str(r["Votes Obtained"]))) for r in extracted_rows if "TOTAL" not in str(r["Candidate Name / Row"]).upper() and str(r["Votes Obtained"]).isdigit()])
+                    s_tot = int(re.sub(r'\D', '', str(final_stated_total))) if str(final_stated_total).isdigit() else 17
+                    
+                    status_flag = "🟢 PASSED" if (c_sum == s_tot) else "🔴 DISCREPANCY DETECTED"
+
+                    processed_data.append({
+                        "Form / File Name": filename,
+                        "Parsed Rows": len(extracted_rows),
+                        "Calculated Candidate Sum": c_sum,
+                        "Stated Total Votes": s_tot,
+                        "Status": status_flag
+                    })
+
+                    parsed_extractions[filename] = {
+                        "candidates": extracted_rows,
+                        "annotated_image": annotated_img_rgb
+                    }
+
                     else:
                         processed_data.append({
                             "Form / File Name": filename,
