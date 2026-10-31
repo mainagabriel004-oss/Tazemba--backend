@@ -100,7 +100,9 @@ with col_in1:
         key="file_uploader_key"
     )
     if uploaded_files:
-        st.session_state.uploaded_batch = [(file.name, file.getvalue()) for file in uploaded_files]
+    # Uncapped intake loop mapping every single file object without truncation
+    st.session_state.uploaded_batch = [(f.name, f.getvalue()) for f in uploaded_files]
+
 
 with col_in2:
     st.markdown("#### 📷 Camera Capture Station")
