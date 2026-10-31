@@ -34,7 +34,7 @@ def optimize_image_bytes(file_bytes, max_dim=1280):
 st.set_page_config(page_title="Tazemba Form 34A Audit Engine", layout="wide")
 
 st.title("🏛️ Tazemba Presidential Form 34A Forensic Audit Engine")
-st.markdown("Automated High-Speed Batch Extraction, Mathematical Reconciliation, & Historical Stacking")
+st.markdown("Automated High-Speed Dynamic Batch Extraction, Mathematical Reconciliation, & Historical Stacking")
 
 # Initialize Session State Variables
 if 'uploaded_batch' not in st.session_state:
@@ -100,9 +100,8 @@ with col_in1:
         key="file_uploader_key"
     )
     if uploaded_files:
-    # Uncapped intake loop mapping every single file object without truncation
-    st.session_state.uploaded_batch = [(f.name, f.getvalue()) for f in uploaded_files]
-
+        # Uncapped intake loop mapping every single file object without truncation
+        st.session_state.uploaded_batch = [(f.name, f.getvalue()) for f in uploaded_files]
 
 with col_in2:
     st.markdown("#### 📷 Camera Capture Station")
@@ -136,10 +135,9 @@ if all_sources:
         if st.button("🗑️ Delete & Clear Selection Queue"):
             st.session_state.uploaded_batch = []
             st.session_state.camera_batch = []
-            if 'processed_data' in st.session_state:
-                del st.session_state.processed_data
-            if 'parsed_extractions' in st.session_state:
-                del st.session_state.parsed_extractions
+            for k in ['processed_data', 'parsed_extractions']:
+                if k in st.session_state:
+                    del st.session_state[k]
             st.rerun()
 
     if run_audit_clicked:
@@ -149,6 +147,7 @@ if all_sources:
         processed_data = []
         parsed_extractions = {}
 
+        # Uncapped processing loop over all queue files without truncation
         for filename, file_bytes in all_sources:
             try:
                 img_cv, _ = optimize_image_bytes(file_bytes)
@@ -156,59 +155,64 @@ if all_sources:
                 if img_cv is not None:
                     ocr_result, _ = ocr(img_cv)
                     
-                    # GUARANTEED CANDIDATE SLATE (Includes Aukot #1 and all 8 candidates)
+                    # FULLY DYNAMIC EXTRACTION (Zero hardcoded names)
                     detected_candidates = {}
-                    for i in range(1, 9):
-                        detected_candidates[i] = {
-                            "Candidate #": i,
-                            "Candidate Name / Row": f"{i}. CANDIDATE {i}",
-                            "Votes Obtained": "0"
-                        }
-                    
-                    candidate_names = {
-                        1: "1. AUROT EKURU APAKOT",
-                        2: "2. DIDA MOHAMED ABDUBA",
-                        3: "3. JIRONGO SHAKHALAGA KHWA",
-                        4: "4. KALUYU JAPHETH KAVINGA",
-                        5: "5. KENYATTA UHURU",
-                        6: "6. MWAURA MICHAEL WAINAINA",
-                        7: "7. NYAGAH JOSEPH WILLIAM NTHIG",
-                        8: "8. ODINGA RAILA"
-                    }
-                    for c_num, c_name in candidate_names.items():
-                        detected_candidates[c_num]["Candidate Name / Row"] = c_name
-
                     stated_total = 0
 
                     if ocr_result:
                         for line in ocr_result:
                             bbox, text, score = line
                             
-                            match_num = re.search(r'\b([1-8])[\.\-\s]', text)
+                            # Dynamically match candidate rows 1 to 8 from the form text
+                            match_num = re.search(r'\b([1-8])[\.\-\s](.*)', text)
                             if match_num:
                                 c_num = int(match_num.group(1))
-                                all_nums = [int(v) for v in re.findall(r'\d+', text)]
-                                valid_votes = [v for v in all_nums if 0 <= v <= 200]
-                                
-                                if valid_votes:
-                                    detected_candidates[c_num]["Votes Obtained"] = str(valid_votes[-1])
+                                c_content = match_num.group(2).strip()
 
+                                # Extract valid vote integers for this row safely
+                                all_nums = [int(v) for v in re.findall(r'\d+', text)]
+                                valid_votes = [v for v in all_nums if 0 <= v <= 150]
+                                vote_val = str(valid_votes[-1]) if valid_votes else "0"
+
+                                # Clean up the extracted candidate name dynamically
+                                name_part = re.sub(r'[\d\s]{4,}.*', '', c_content)
+                                if not name_part or len(name_part) < 3:
+                                    name_part = c_content
+
+                                if c_num not in detected_candidates:
+                                    detected_candidates[c_num] = {
+                                        "Candidate #": c_num,
+                                        "Candidate Name / Row": f"{c_num}. {name_part.upper()}",
+                                        "Votes Obtained": vote_val
+                                    }
+
+                            # Detect stated total votes cast accurately
                             if "total" in text.lower() or "valid votes" in text.lower() or "cde" in text.lower():
                                 total_matches = [int(m) for m in re.findall(r'\d+', text)]
                                 plausible_totals = [m for m in total_matches if 0 < m < 10000]
                                 if plausible_totals:
                                     stated_total = plausible_totals[-1]
 
+                    # Fallback defaults if OCR misses structure completely on a specific blank frame
+                    if not detected_candidates:
+                        for i in range(1, 9):
+                            detected_candidates[i] = {
+                                "Candidate #": i,
+                                "Candidate Name / Row": f"{i}. CANDIDATE {i}",
+                                "Votes Obtained": "0"
+                            }
+
                     df_rows = list(detected_candidates.values())
                     df_rows.append({
                         "Candidate #": 9,
                         "Candidate Name / Row": "Total number of valid votes cast",
-                        "Votes Obtained": str(stated_total if stated_total > 0 else 16)
+                        "Votes Obtained": str(stated_total if stated_total > 0 else 0)
                     })
 
+                    # Store dictionary mapping properly for the inspector selectbox
                     parsed_extractions[filename] = {
                         "df": pd.DataFrame(df_rows),
-                        "stated_total": stated_total if stated_total > 0 else 16,
+                        "stated_total": stated_total,
                         "image": img_cv
                     }
 
@@ -230,9 +234,9 @@ if all_sources:
 
         if processed_data:
             st.session_state.processed_data = processed_data
-            st.session_state.parsed_extractions = processed_data
+            st.session_state.parsed_extractions = parsed_extractions
 
-    # Render Global Results
+    # Render Global Results if available in session state
     if 'processed_data' in st.session_state and st.session_state.processed_data:
         st.markdown("## 📊 Global Form 34A Batch Overview")
         batch_df = pd.DataFrame(st.session_state.processed_data)
@@ -253,8 +257,9 @@ if all_sources:
                 st.session_state.archived_batches.extend(st.session_state.processed_data)
                 st.session_state.uploaded_batch = []
                 st.session_state.camera_batch = []
-                del st.session_state.processed_data
-                del st.session_state.parsed_extractions
+                for k in ['processed_data', 'parsed_extractions']:
+                    if k in st.session_state:
+                        del st.session_state[k]
                 st.success("Current batch moved to sidebar archive & working queue cleared!")
                 st.rerun()
 
@@ -305,9 +310,6 @@ if all_sources:
                         st.error(f"🔴 **AUDIT STATUS: DISCREPANCY DETECTED** — Discrepancy of {abs(calculated_sum - stated_form_total)} votes found between candidate sum and stated total!")
                 except Exception as ex:
                     st.warning(f"Ensure all vote entries are valid integers for real-time reconciliation. ({ex})")
-
-
-
 
 
 
