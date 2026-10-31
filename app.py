@@ -117,100 +117,87 @@ if all_sources:
             st.session_state.trial_count += 1
         st.rerun()
 
-    processed_data = []
-    parsed_extractions = {}
+processed_data = []
+parsed_extractions = {}
 
-    # Process files once loaded
-    for filename, file_bytes in all_sources:
-        nparr = np.frombuffer(file_bytes, np.uint8)
-        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+# Process files once loaded
+for filename, file_bytes in all_sources:
+    nparr = np.frombuffer(file_bytes, np.uint8)
+    img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        if img_cv is not None:
-            img_height, img_width = img_cv.shape[:2]
+    if img_cv is not None:
+        img_height, img_width = img_cv.shape[:2]
 
-            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            enhanced = clahe.apply(gray)
-            ocr_input_img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
-            annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        enhanced = clahe.apply(gray)
+        ocr_input_img = cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+        annotated_img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-            full_ocr, _ = ocr_engine(ocr_input_img)
-            
-            extracted_rows = []
-            stated_total_votes = "0"
-            detected_candidates = {}
+        full_ocr, _ = ocr_engine(ocr_input_img)
+        
+        extracted_rows = []
+        stated_total_votes = "0"
+        detected_candidates = {}
 
-    if full_ocr:
-        sorted_ocr = sorted(full_ocr, key=lambda b: b[0][0][1])
-        rows_grouped = []
-        current_row = []
-        last_y = -1
+        if full_ocr:
+            sorted_ocr = sorted(full_ocr, key=lambda b: b[0][0][1])
+            rows_grouped = []
+            current_row = []
+            last_y = -1
 
-        print(f"DEBUG OCR TOTAL ITEMS FOUND: {len(sorted_ocr)}")
-
-        for box, text, score in sorted_ocr:
-            box_y = box[0][1]
-            if last_y == -1 or abs(box_y - last_y) < 15:
-                current_row.append((box, text, score))
-                if last_y == -1:
+            for box, text, score in sorted_ocr:
+                box_y = box[0][1]
+                if last_y == -1 or abs(box_y - last_y) < 15:
+                    current_row.append((box, text, score))
+                    if last_y == -1:
+                        last_y = box_y
+                else:
+                    rows_grouped.append(current_row)
+                    current_row = [(box, text, score)]
                     last_y = box_y
-            else:
+            if current_row:
                 rows_grouped.append(current_row)
-                current_row = [(box, text, score)]
-                last_y = box_y
-        if current_row:
-            rows_grouped.append(current_row)
 
-        print(f"DEBUG TOTAL ROWS GROUPED: {len(rows_grouped)}")
+            skip_keywords = [
+                "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE",
+                "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR",
+                "ELECTORAL", "BOUNDARIES", "REASONS FOR"
+            ]
+            in_candidate_section = True
 
-        skip_keywords = [
-            "PASSPORT", "PARTY", "TEL", "SIGN", "SIGNATURE",
-            "DECLARATION", "POLLING STATION COUNTS", "AGENTS OR",
-            "ELECTORAL", "BOUNDARIES", "REASONS FOR"
-        ]
-        in_candidate_section = True
+            for group in rows_grouped:
+                group_sorted = sorted(group, key=lambda b: b[0][0])
+                full_row_text = " ".join([item[1] for item in group_sorted])
+                upper_text = full_row_text.upper()
 
-        for group in rows_grouped:
+                if "TOTAL NUMBER OF VALID VOTES" in upper_text:
+                    num_matches = re.findall(r'\d+', full_row_text)
+                    if num_matches:
+                        stated_total_votes = num_matches[-1]
+                    continue
 
-                    group_sorted = sorted(group, key=lambda b: b[0][0])
-                    full_row_text = " ".join([item[1] for item in group_sorted])
-                    upper_text = full_row_text.upper()
+                if not in_candidate_section or any(kw in upper_text for kw in skip_keywords):
+                    continue
 
-                    if "TOTAL NUMBER OF VALID VOTES" in upper_text:
-                        num_matches = re.findall(r'\d+', full_row_text)
-                        if num_matches:
-                            stated_total_votes = num_matches[-1]
-                        continue
+                match_num = re.search(r'\b([1-8])[\.\-\s]*([A-Za-z].*)', full_row_text)
+                if match_num:
+                    c_num = int(match_num.group(1))
+                    c_content = match_num.group(2).strip()
 
+                    vote_matches = re.findall(r'\b(0\d\d|\d{3})\b', full_row_text)
+                    vote_val = vote_matches[-1] if vote_matches else "0"
 
-                    if not in_candidate_section:
-                        continue
+                    name_part = re.sub(r'[\d\s]{4,}.*', '', c_content).strip()
+                    if not name_part:
+                        name_part = c_content
 
-                    if any(kw in upper_text for kw in skip_keywords):
-                        continue
-                # Debug check to see what lines OCR is processing
-        print(f"DEBUG ROW: {full_row_text}")
-
-        match_num = re.search(r'\b([1-8])[\.\-\s]*([A-Za-z].*)', full_row_text)
-        if match_num:
-            c_num = int(match_num.group(1))
-            c_content = match_num.group(2).strip()
-
-            vote_matches = re.findall(r'\b(0\d\d|\d{3})\b', full_row_text)
-            vote_val = vote_matches[-1] if vote_matches else "0"
-
-            # Strip trailing ID/serial numbers (4 or more digits) from candidate name
-            name_part = re.sub(r'[\d\s]{4,}.*', '', c_content).strip()
-            if not name_part:
-                name_part = c_content
-
-            if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
-                detected_candidates[c_num] = {
-                    "Candidate #": c_num,
-                    "Candidate Name / Row": f"{c_num}. {name_part}",
-                    "Votes Obtained": vote_val
-                }
-
+                    if c_num not in detected_candidates and len(name_part) > 1 and not any(w in name_part.upper() for w in ["TOTAL", "VALID", "CAST"]):
+                        detected_candidates[c_num] = {
+                            "Candidate #": c_num,
+                            "Candidate Name / Row": f"{c_num}. {name_part}",
+                            "Votes Obtained": vote_val
+                        }
 
             if detected_candidates:
                 for c_num in sorted(detected_candidates.keys()):
@@ -222,7 +209,6 @@ if all_sources:
                     "Votes Obtained": "0"
                 })
 
-            # Append Official Total Valid Votes Row
             extracted_rows.append({
                 "Candidate #": len(extracted_rows) + 1,
                 "Candidate Name / Row": "Total number of valid votes cast",
@@ -240,8 +226,9 @@ if all_sources:
                 "annotated_image": annotated_img_rgb
             }
 
-    # Save to session state for refresh resilience
-    st.session_state.saved_processed_data = processed_data
+# Save to session state for refresh resilience
+st.session_state.saved_processed_data = processed_data
+
 
 if st.session_state.get('saved_processed_data', []):
 
