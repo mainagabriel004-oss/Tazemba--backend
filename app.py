@@ -182,9 +182,10 @@ if all_sources:
                             c_num = int(match_num.group(1))
                             c_content = match_num.group(2).strip()
 
-                            # Extract vote values strictly from the candidate row text
-                            vote_matches = re.findall(r'\b\d{1,3}\b', full_row_text)
-                            vote_val = vote_matches[-1] if vote_matches else "0"
+                        # Extract vote values strictly: exclude the candidate number itself
+                        vote_matches = [v for v in re.findall(r'\b\d{1,3}\b', full_row_text) if int(v) != c_num and int(v) <= 500]
+                        vote_val = vote_matches[-1] if vote_matches else "0"
+
                             
                             # Sanity check: Discard any rogue background numbers (like station IDs > 500)
                             if int(vote_val) > 500:
