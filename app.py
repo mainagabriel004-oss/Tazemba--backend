@@ -100,7 +100,7 @@ with col_in1:
         key="file_uploader_key"
     )
     if uploaded_files:
-        # Uncapped intake loop mapping every single file object without truncation
+        # Full uncapped intake mapping every single uploaded file object without truncation
         st.session_state.uploaded_batch = [(f.name, f.getvalue()) for f in uploaded_files]
 
 with col_in2:
@@ -155,36 +155,43 @@ if all_sources:
                 if img_cv is not None:
                     ocr_result, _ = ocr(img_cv)
                     
-                    # FULLY DYNAMIC EXTRACTION (Zero hardcoded names)
+                    # GUARANTEED DYNAMIC SLATE (Ensures all 8 slots 1-8 always initialize, preventing missing rows)
                     detected_candidates = {}
+                    for i in range(1, 9):
+                        detected_candidates[i] = {
+                            "Candidate #": i,
+                            "Candidate Name / Row": f"{i}. CANDIDATE {i}",
+                            "Votes Obtained": "0"
+                        }
+
                     stated_total = 0
 
                     if ocr_result:
                         for line in ocr_result:
                             bbox, text, score = line
                             
-                            # Dynamically match candidate rows 1 to 8 from the form text
+                            # Dynamically match candidate rows 1 to 8
                             match_num = re.search(r'\b([1-8])[\.\-\s](.*)', text)
                             if match_num:
                                 c_num = int(match_num.group(1))
                                 c_content = match_num.group(2).strip()
 
-                                # Extract valid vote integers for this row safely
+                                # Extract all numbers, but EXCLUDE the row index itself (c_num) from being picked as a vote!
                                 all_nums = [int(v) for v in re.findall(r'\d+', text)]
-                                valid_votes = [v for v in all_nums if 0 <= v <= 150]
+                                valid_votes = [v for v in all_nums if v != c_num and 0 <= v <= 150]
+                                
                                 vote_val = str(valid_votes[-1]) if valid_votes else "0"
 
-                                # Clean up the extracted candidate name dynamically
+                                # Clean up candidate name dynamically without hardcoding
                                 name_part = re.sub(r'[\d\s]{4,}.*', '', c_content)
                                 if not name_part or len(name_part) < 3:
                                     name_part = c_content
 
-                                if c_num not in detected_candidates:
-                                    detected_candidates[c_num] = {
-                                        "Candidate #": c_num,
-                                        "Candidate Name / Row": f"{c_num}. {name_part.upper()}",
-                                        "Votes Obtained": vote_val
-                                    }
+                                detected_candidates[c_num] = {
+                                    "Candidate #": c_num,
+                                    "Candidate Name / Row": f"{c_num}. {name_part.upper()}",
+                                    "Votes Obtained": vote_val
+                                }
 
                             # Detect stated total votes cast accurately
                             if "total" in text.lower() or "valid votes" in text.lower() or "cde" in text.lower():
@@ -192,15 +199,6 @@ if all_sources:
                                 plausible_totals = [m for m in total_matches if 0 < m < 10000]
                                 if plausible_totals:
                                     stated_total = plausible_totals[-1]
-
-                    # Fallback defaults if OCR misses structure completely on a specific blank frame
-                    if not detected_candidates:
-                        for i in range(1, 9):
-                            detected_candidates[i] = {
-                                "Candidate #": i,
-                                "Candidate Name / Row": f"{i}. CANDIDATE {i}",
-                                "Votes Obtained": "0"
-                            }
 
                     df_rows = list(detected_candidates.values())
                     df_rows.append({
@@ -310,6 +308,7 @@ if all_sources:
                         st.error(f"🔴 **AUDIT STATUS: DISCREPANCY DETECTED** — Discrepancy of {abs(calculated_sum - stated_form_total)} votes found between candidate sum and stated total!")
                 except Exception as ex:
                     st.warning(f"Ensure all vote entries are valid integers for real-time reconciliation. ({ex})")
+
 
 
 
