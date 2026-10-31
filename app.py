@@ -179,7 +179,8 @@ if all_sources:
                                 c_num = int(match_num.group(1))
                                 c_content = match_num.group(2).strip()
 
-                                vote_matches = re.findall(r'\b(0\d\d|\d{3})\b', full_row_text)
+                                vote_matches = re.findall(r'\b\d{1,3}\b', full_row_text)
+
                                 vote_val = vote_matches[-1] if vote_matches else "0"
 
                                 name_part = re.sub(r'[\d\s]{4,}.*', '', c_content).strip()
